@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <curl/curl.h>
 #include <libxml2/libxml/HTMLparser.h>
 #include <libxml2/libxml/xpath.h>
@@ -14,7 +15,7 @@
 #define ENDPOINT_DOWNLOAD_TORRENT "https://rutracker.org/forum/dl.php?t={id}" 
 
 
-int authUser(CURL *curl_handle,const char* user, const char* password);
+int authenticate(CURL *curl_handle,const char* user, const char* password);
 
 
 
