@@ -8,8 +8,8 @@
 #include <string.h>
 #include <curl/curl.h>
 #include <stdbool.h>
-//#include <libxml2/libxml/HTMLparser.h>
-//#include <libxml2/libxml/xpath.h>
+#include "types.h"
+#include "utils.h"
 
 #define BASE_URL "https://rutracker.org"
 #define LOGIN_STRING_ENCODED "%C2%F5%EE%E4"
@@ -18,13 +18,14 @@
 #define ENDPOINT_DOWNLOAD_TORRENT "https://rutracker.org/forum/dl.php?t={id}" 
 
 
-int authenticate(CURL *curl_handle,const char* user, const char* password);
+int authenticate(CURL *curl_handle,const char* user, const char* password, FILE *log_file);
 
-int search(CURL *curl_handle,const char* search_string);
+int search(CURL *curl_handle,const char* search_string, FILE *log_file);
 
 bool isLogged(CURL *curl_handle);
 
 
+int convert(char* html_content);
 
 
 #endif
