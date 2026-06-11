@@ -1,1 +1,19 @@
+# Ignore everything
+*
 
+# Allow directories so Git can traverse them
+!*/
+
+# Allow C source files
+!*.c
+
+# Allow header files
+!*.h
+
+# Allow Makefiles
+!Makefile
+!makefile
+!GNUmakefile
+
+# Allow the .gitignore itself
+!.gitignore
