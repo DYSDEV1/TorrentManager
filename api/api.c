@@ -95,10 +95,10 @@ int authenticate(CURL *curl_handle,const char* user,const char* password, FILE *
     CURLcode code_return_curl_request;
     int code_function_return = 0;
     char* fmt= "login_username=%s&login_password=%s&login=%s";
-    char* postfields;
+    char* postfields = NULL;
     FILE *html_file;
 
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_COOKIEFILE,"cookies.txt") == CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_COOKIEFILE,"cookies.txt")) == CURLE_OK){
         if(curl_easy_setopt(curl_handle, CURLOPT_COOKIELIST, "RELOAD") != CURLE_OK){
             fprintf(log_file, "[!] Failed to reload cookies\n");
         }
@@ -110,18 +110,17 @@ int authenticate(CURL *curl_handle,const char* user,const char* password, FILE *
     
     }
 
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,ENDPOINT_LOGIN) != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,ENDPOINT_LOGIN)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set url.\n");
-        code_function_return = -1;
         goto Cleanup;
     }
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse) != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set writefunction.\n");
         code_function_return = -1;
         goto Cleanup;
     }
 
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)&curl_res) != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)&curl_res)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set result structure\n");
         code_function_return = -1;
         goto Cleanup;
@@ -143,13 +142,13 @@ int authenticate(CURL *curl_handle,const char* user,const char* password, FILE *
     snprintf(postfields,(size_t)(nb_required_bytes+1),fmt,user,password,LOGIN_STRING_ENCODED);
 
 
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_POSTFIELDS,postfields) != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_POSTFIELDS,postfields)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set postfields\n");
         code_function_return = -1;
         goto Cleanup;
     }
 
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_COOKIEJAR,"cookies.txt") != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_COOKIEJAR,"cookies.txt")) != CURLE_OK){
         fprintf(log_file, "[!] Failed to set cookies\n");
         code_function_return = -1;
         goto Cleanup;
@@ -157,8 +156,10 @@ int authenticate(CURL *curl_handle,const char* user,const char* password, FILE *
 
     code_return_curl_request = curl_easy_perform(curl_handle);
 
-    if(code_return_curl_request == CURLE_OK){
-        saveHtmlToFile(html_file,&curl_res);
+    if(code_return_curl_request != CURLE_OK){
+        fprintf(log_file,"[!] Failed to execute authenticate request.\n");
+        code_function_return = -1;
+        goto Cleanup;
     }
 
 
@@ -167,6 +168,7 @@ int authenticate(CURL *curl_handle,const char* user,const char* password, FILE *
     }
     else{
         fprintf(log_file,"[-] Failed to login\n");
+        code_function_return = -1;
     }
 
     Cleanup:
@@ -188,7 +190,7 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
     struct curl_response curl_res = {0};
     CURLcode code_return_curl_request;
     int code_function_return = 0;
-    char* url_search;
+    char* url_search = NULL;
 
     if(!isLogged(curl_handle)){
         if(authenticate(curl_handle,getenv("username_rutracker"),getenv("password_rutracker"),log_file) != 0){
@@ -214,17 +216,18 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
     }
     snprintf(url_search,(size_t)(nb_required_bytes+1),ENDPOINT_SEARCH,search_string);
 
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,url_search) != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,url_search)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set url.\n");
         code_function_return = -1;
         goto Cleanup;
     }
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse) != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set writefunction.\n");
-        return NULL;
+        code_function_return = -1;
+        goto Cleanup;
     }
 
-     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)&curl_res) != CURLE_OK)){
+     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)&curl_res)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set result structure\n");
         code_function_return = -1;
         goto Cleanup;
@@ -257,8 +260,8 @@ int download(CURL *curl_handle,char *torrent_name, FILE *log_file){
     struct curl_response curl_res = {0};
     CURLcode code_return_curl_request;
     int code_function_return = 0;
-    char* url_download;
-    FILE *torrent_file;
+    char* url_download = NULL;
+    FILE *torrent_file = NULL;
 
     if(!isLogged(curl_handle)){
         if(authenticate(curl_handle,getenv("username_rutracker"),getenv("password_rutracker"),log_file) != 0){
@@ -285,12 +288,12 @@ int download(CURL *curl_handle,char *torrent_name, FILE *log_file){
 
     snprintf(url_download,(size_t)(nb_required_bytes+1),ENDPOINT_DOWNLOAD,torrent_name);
 
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,url_download) != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,url_download)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set url.\n");
         code_function_return = -1;
         goto Cleanup;
     }
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleDownloadTorrent) != CURLE_OK)){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleDownloadTorrent)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set writefunction.\n");
         code_function_return = -1;
         goto Cleanup;
@@ -303,7 +306,7 @@ int download(CURL *curl_handle,char *torrent_name, FILE *log_file){
         goto Cleanup;
     }
 
-     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)&torrent_file) != CURLE_OK)){
+     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)&torrent_file)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set result structure\n");
         code_function_return = -1;
         goto Cleanup;

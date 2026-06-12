@@ -10,5 +10,6 @@
 
 struct torrent* parse(struct curl_response *curl_res);
 
+void torrents_cleanup(struct torrent *torrents_list);
 
 #endif

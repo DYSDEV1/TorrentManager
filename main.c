@@ -1,5 +1,5 @@
-#include "api_rutracker/api.h"
-#include "api_rutracker/env.h"
+#include "api/api.h"
+#include "api/env.h"
 #include "gui/gui.h"
 
 #define MAX_INPUT_SIZE 256
@@ -12,7 +12,7 @@ int main(){
     char ch;
     char user_search_input[MAX_INPUT_SIZE];
     bool exit = false;
-    struct torrent *torrents_list;
+    struct torrent *torrents_list = NULL;
     
     log_file = fopen("logs.txt","w");
 
@@ -42,13 +42,18 @@ int main(){
 
     while(!exit){
         if(ctx.current_windows_state == SEARCH){
+            gui_cleanup(&ctx);
+            torrents_cleanup(torrents_list);
             wgetnstr(ctx.win_search_bar,user_search_input,MAX_INPUT_SIZE);
             torrents_list = search(curl_handle,user_search_input, log_file);
             if(!torrents_list){
                 goto cleanup;
             }
             ctx.current_windows_state = LIST_TORRENTS;
-            gui_create_menu(torrents_list,&ctx);
+            if(gui_create_menu(torrents_list,&ctx) == -1){
+                fprintf(log_file, "[!] Failed to create menu\n");
+                goto cleanup;
+            }
         }
         ch  = getch();
         switch(ch){
@@ -81,15 +86,11 @@ int main(){
 
     cleanup:
         gui_cleanup(&ctx);
+        torrents_cleanup(torrents_list);
         if(log_file)
             fclose(log_file);
         if(curl_handle)
             curl_easy_cleanup(curl_handle);
-        if(torrents_list)
-            while(torrents_list != NULL){
-                free(torrents_list->information);
-                torrents_list = torrents_list->next;
-            }
     
     return 0; 
 }

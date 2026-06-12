@@ -32,6 +32,8 @@ int download(CURL *curl_handle,char* torrent_name, FILE *log_file);
 
 int uploadToServer(CURL *curl_handle,char* torrent_name, FILE *log_file);
 
+int retrieveUploadProgression(CURL *curl_handle, char* torrent_name, FILE *log_file);
+
 int downloadFromServer(CURL *curl_handle, char* torrent_name, FILE *log_file);
 
 

@@ -18,12 +18,13 @@ struct torrent* parse(struct curl_response *curl_res){
             code_function_return = -1;
             goto Cleanup;
         }
-        curr->next = head;
-        head = curr;
         if(sscanf(line,SSCANF_EXTRACT_STRING,&curr->id,curr->information) != 2){
             free(curr->information);
             free(curr);
+            continue;
         }
+        curr->next = head;
+        head = curr;
         cp_html += strlen(HTML_INDICATOR);
    
     }
@@ -37,4 +38,16 @@ struct torrent* parse(struct curl_response *curl_res){
         }
 
     return head;
+}
+
+
+void torrents_cleanup(struct torrent *torrents_list){
+    if(torrents_list){
+        while(torrents_list != NULL){
+            struct torrent *next = torrents_list->next;
+            free(torrents_list->information);
+            free(torrents_list);
+            torrents_list = next;
+        }
+    }
 }

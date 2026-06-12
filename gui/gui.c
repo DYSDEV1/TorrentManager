@@ -9,19 +9,26 @@ void gui_init(){
 }
 
 void gui_cleanup(struct ctx *ctx){
-    unpost_menu(ctx->menu);
-    free_menu(ctx->menu);
+    if(ctx->menu){
+        unpost_menu(ctx->menu);
+        free_menu(ctx->menu);
+    }
+    ctx->menu = NULL;
     for(int i = 0; i < ctx->nb_items;i++){
         free_item(ctx->items[i]);
     }
     free(ctx->items);
+    ctx->items = NULL;
+    ctx->nb_items = 0;
     delwin(ctx->win_search_bar);
     delwin(ctx->win_torrent_list);
+    ctx->win_search_bar = NULL;
+    ctx->win_torrent_list = NULL;
     endwin();
 }
 
 int gui_create_window_search_bar(struct ctx *ctx){
-    int width, height;
+    int width,height;
     getmaxyx(stdscr,height,width);
     WINDOW *win_search_bar = newwin(SB_HEIGHT, SB_WIDTH,2,(width - SB_WIDTH)/2);
     if(win_search_bar == NULL){
@@ -36,7 +43,6 @@ int gui_create_window_search_bar(struct ctx *ctx){
     return 0;
   
 }
-
 
 
 int gui_create_window_torrent_list(struct ctx *ctx){
@@ -60,7 +66,7 @@ void gui_draw_windows(struct ctx *ctx){
 }
 
 
-void gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
+int gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
     int count = 0;
     ctx->nb_items = 0;
     struct torrent *cp_tl = torrents_list;
@@ -68,17 +74,27 @@ void gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
         ctx->nb_items ++;
         cp_tl = cp_tl->next;
     }
+    ctx->items = (ITEM**) calloc((size_t)(ctx->nb_items+1),sizeof(ITEM *));
+    if(!ctx->items){
+        return -1;
+    }
     cp_tl = torrents_list;
-    ctx->items = (ITEM**) calloc(ctx->nb_items+1,sizeof(ITEM *));
     while(cp_tl != NULL){
         ctx->items[count] = new_item(cp_tl->information, cp_tl->information);
+        if(!ctx->items[count]){
+            return -1;
+        }
         count ++;
         cp_tl = cp_tl->next;
     }
     ctx->items[ctx->nb_items] = NULL;
     ctx->menu = new_menu((ITEM **)ctx->items);
+    if(!ctx->menu){
+        return -1;
+    }
     post_menu(ctx->menu);
     refresh();
+    return 0;
 
 }
 
