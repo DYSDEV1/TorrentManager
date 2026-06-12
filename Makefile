@@ -1,8 +1,8 @@
 CC = gcc
-CFLAGS = -g
-LDFLAGS = -lcurl -lncurses -lmenu
+CFLAGS = -g -Wall -Wextra -Wconversion -Wsign-conversion -fsanitize=address,undefined
+LDFLAGS = -lcurl -lncurses -lmenu -fsanitize=address,undefined
 
-RU_API_DIR = api_rutracker
+API_DIR = api
 GUI_DIR = gui
 BUILD_DIR = build
 UTILS_DIR = utils
@@ -20,17 +20,17 @@ OBJS = \
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-$(BUILD_DIR)/main.o: main.c $(RU_API_DIR)/api.h $(RU_API_DIR)/env.h
+$(BUILD_DIR)/main.o: main.c $(API_DIR)/api.h $(API_DIR)/env.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/api.o: $(RU_API_DIR)/api.c
+$(BUILD_DIR)/api.o: $(API_DIR)/api.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/env.o: $(RU_API_DIR)/env.c
+$(BUILD_DIR)/env.o: $(API_DIR)/env.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/gui.o: $(GUI_DIR)/gui.c $(GUI_DIR)/gui.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/utils.o: $(RU_API_DIR)/utils.c $(RU_API_DIR)/utils.h
+$(BUILD_DIR)/utils.o: $(API_DIR)/utils.c $(API_DIR)/utils.h
 	$(CC) $(CFLAGS) -c $< -o $@	

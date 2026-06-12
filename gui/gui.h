@@ -5,6 +5,7 @@
 #include <menu.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../api_rutracker/types.h"
 
 #define SB_HEIGHT 3
 #define SB_WIDTH  40 
@@ -20,6 +21,9 @@ struct ctx{
     WINDOW *win_search_bar;
     WINDOW *win_torrent_list;
     enum win_state current_windows_state;
+    ITEM **items;
+    MENU *menu;
+    int nb_items;
 };
 
 void gui_init();
@@ -31,5 +35,8 @@ int gui_create_window_torrent_list(struct ctx *ctx);
 void gui_draw_windows(struct ctx *ctx);
 
 int gui_use_search_bar(struct ctx *ctx);
+
+void gui_create_menu(struct torrent *torrents_list,struct ctx *ctx);
+
 
 #endif

@@ -9,6 +9,12 @@ void gui_init(){
 }
 
 void gui_cleanup(struct ctx *ctx){
+    unpost_menu(ctx->menu);
+    free_menu(ctx->menu);
+    for(int i = 0; i < ctx->nb_items;i++){
+        free_item(ctx->items[i]);
+    }
+    free(ctx->items);
     delwin(ctx->win_search_bar);
     delwin(ctx->win_torrent_list);
     endwin();
@@ -53,4 +59,26 @@ void gui_draw_windows(struct ctx *ctx){
     ctx->current_windows_state = SEARCH;
 }
 
+
+void gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
+    int count = 0;
+    ctx->nb_items = 0;
+    struct torrent *cp_tl = torrents_list;
+    while(cp_tl != NULL){
+        ctx->nb_items ++;
+        cp_tl = cp_tl->next;
+    }
+    cp_tl = torrents_list;
+    ctx->items = (ITEM**) calloc(ctx->nb_items+1,sizeof(ITEM *));
+    while(cp_tl != NULL){
+        ctx->items[count] = new_item(cp_tl->information, cp_tl->information);
+        count ++;
+        cp_tl = cp_tl->next;
+    }
+    ctx->items[ctx->nb_items] = NULL;
+    ctx->menu = new_menu((ITEM **)ctx->items);
+    post_menu(ctx->menu);
+    refresh();
+
+}
 
