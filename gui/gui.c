@@ -12,14 +12,19 @@ void gui_cleanup(struct ctx *ctx){
     if(ctx->menu){
         unpost_menu(ctx->menu);
         free_menu(ctx->menu);
+        ctx->menu = NULL;
     }
     ctx->menu = NULL;
-    for(int i = 0; i < ctx->nb_items;i++){
-        free_item(ctx->items[i]);
+    if(ctx->items){
+        for(int i = 0; i < ctx->nb_items;i++){
+            if(ctx->items[i]){
+                free_item(ctx->items[i]);
+            }
+        }
+        free(ctx->items);
+        ctx->items = NULL;
+        ctx->nb_items = 0;
     }
-    free(ctx->items);
-    ctx->items = NULL;
-    ctx->nb_items = 0;
     delwin(ctx->win_search_bar);
     delwin(ctx->win_torrent_list);
     ctx->win_search_bar = NULL;
@@ -69,6 +74,7 @@ void gui_draw_windows(struct ctx *ctx){
 int gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
     int count = 0;
     ctx->nb_items = 0;
+    int code_function_return = 0;
     struct torrent *cp_tl = torrents_list;
     while(cp_tl != NULL){
         ctx->nb_items ++;
@@ -76,13 +82,15 @@ int gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
     }
     ctx->items = (ITEM**) calloc((size_t)(ctx->nb_items+1),sizeof(ITEM *));
     if(!ctx->items){
-        return -1;
+        code_function_return = -1;
+        goto Cleanup;
     }
     cp_tl = torrents_list;
     while(cp_tl != NULL){
-        ctx->items[count] = new_item(cp_tl->information, cp_tl->information);
+        ctx->items[count] = new_item(cp_tl->id, cp_tl->information);
         if(!ctx->items[count]){
-            return -1;
+            code_function_return = -1;
+            goto Cleanup;
         }
         count ++;
         cp_tl = cp_tl->next;
@@ -90,11 +98,32 @@ int gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
     ctx->items[ctx->nb_items] = NULL;
     ctx->menu = new_menu((ITEM **)ctx->items);
     if(!ctx->menu){
-        return -1;
+        code_function_return = -1;
+        goto Cleanup;
     }
     post_menu(ctx->menu);
     refresh();
-    return 0;
+
+    Cleanup:
+        if(code_function_return != 0){
+            if(ctx->items){
+                for(int i = 0; i < ctx->nb_items;i++){
+                    if(ctx->items[i]){
+                        free_item(ctx->items[i]);
+                    }
+                }
+                free(ctx->items);
+                ctx->items = NULL;
+                ctx->nb_items = 0;
+            }
+            if(ctx->menu){
+                unpost_menu(ctx->menu);
+                free_menu(ctx->menu);
+                ctx->menu = NULL;
+            }
+        }
+
+    return code_function_return;
 
 }
 

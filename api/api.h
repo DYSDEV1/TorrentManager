@@ -17,7 +17,7 @@
 #define LOGIN_STRING_ENCODED "%C2%F5%EE%E4"
 #define ENDPOINT_LOGIN "https://rutracker.org/forum/login.php"
 #define ENDPOINT_SEARCH "https://rutracker.org/forum/tracker.php?nm=%s"
-#define ENDPOINT_DOWNLOAD "https://rutracker.org/forum/dl.php?t={%s}" 
+#define ENDPOINT_DOWNLOAD "https://rutracker.org/forum/dl.php?t=%s" 
 #define MAX_RESPONSE_SIZE (50 * 1024 * 1024) 
 #define FILENAME_SIZE 11
 
@@ -28,7 +28,7 @@ struct torrent* search(CURL *curl_handle,const char* search_string, FILE *log_fi
 bool isLogged(CURL *curl_handle);
 
 
-int download(CURL *curl_handle,char* torrent_name, FILE *log_file);
+int download(CURL *curl_handle,const char* torrent_name, FILE *log_file);
 
 int uploadToServer(CURL *curl_handle,char* torrent_name, FILE *log_file);
 

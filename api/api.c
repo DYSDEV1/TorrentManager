@@ -11,7 +11,6 @@ int saveHtmlToFile(FILE *html_file,struct curl_response *curl_res){
     return 0;
 }
 
-
 bool isLogged(CURL *curl_handle){
     struct curl_slist *cookies;
     long expiration_date;
@@ -96,7 +95,6 @@ int authenticate(CURL *curl_handle,const char* user,const char* password, FILE *
     int code_function_return = 0;
     char* fmt= "login_username=%s&login_password=%s&login=%s";
     char* postfields = NULL;
-    FILE *html_file;
 
     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_COOKIEFILE,"cookies.txt")) == CURLE_OK){
         if(curl_easy_setopt(curl_handle, CURLOPT_COOKIELIST, "RELOAD") != CURLE_OK){
@@ -177,6 +175,7 @@ int authenticate(CURL *curl_handle,const char* user,const char* password, FILE *
         if(curl_res.html)
             free(curl_res.html);
 
+    fflush(log_file);
 
     return (int) code_function_return;
 
@@ -191,6 +190,7 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
     CURLcode code_return_curl_request;
     int code_function_return = 0;
     char* url_search = NULL;
+    char* encoded_search_string = NULL;
 
     if(!isLogged(curl_handle)){
         if(authenticate(curl_handle,getenv("username_rutracker"),getenv("password_rutracker"),log_file) != 0){
@@ -200,7 +200,14 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
         }   
     }
 
-    int nb_required_bytes = snprintf(NULL,0,ENDPOINT_SEARCH,search_string);
+    if((encoded_search_string = curl_easy_escape(curl_handle,search_string,(int)strlen(search_string))) == NULL){
+        fprintf(log_file,"[!] Failed to encode url.\n");
+        code_function_return = -1;
+        goto Cleanup;
+    }
+
+
+    int nb_required_bytes = snprintf(NULL,0,ENDPOINT_SEARCH,encoded_search_string);
 
     if(nb_required_bytes < 0){
         fprintf(log_file,"[!] Failed to alloc url.\n");
@@ -214,7 +221,7 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
         code_function_return = -1;
         goto Cleanup;
     }
-    snprintf(url_search,(size_t)(nb_required_bytes+1),ENDPOINT_SEARCH,search_string);
+    snprintf(url_search,(size_t)(nb_required_bytes+1),ENDPOINT_SEARCH,encoded_search_string);
 
     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,url_search)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set url.\n");
@@ -247,16 +254,20 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
             free(curl_res.html);
         if(url_search)
             free(url_search);
+        if(encoded_search_string)
+            curl_free(encoded_search_string);
         
     if(code_function_return == -1){
+        fflush(log_file);
         return NULL;
     }else{
+        fflush(log_file);
         return torrents_list;
     }
 
 }
 
-int download(CURL *curl_handle,char *torrent_name, FILE *log_file){
+int download(CURL *curl_handle,const char *torrent_name, FILE *log_file){
     struct curl_response curl_res = {0};
     CURLcode code_return_curl_request;
     int code_function_return = 0;
@@ -306,7 +317,7 @@ int download(CURL *curl_handle,char *torrent_name, FILE *log_file){
         goto Cleanup;
     }
 
-     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)&torrent_file)) != CURLE_OK){
+     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)torrent_file)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set result structure\n");
         code_function_return = -1;
         goto Cleanup;
@@ -327,7 +338,8 @@ int download(CURL *curl_handle,char *torrent_name, FILE *log_file){
             free(curl_res.html);
         if(url_download)
             free(url_download);
-        
+    
+    fflush(log_file);
     return code_function_return;
 
 }

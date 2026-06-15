@@ -9,7 +9,7 @@ int main(){
     curl_global_init(CURL_GLOBAL_ALL);
     CURL *curl_handle = curl_easy_init();
     struct ctx ctx = {0};
-    char ch;
+    int ch;
     char user_search_input[MAX_INPUT_SIZE];
     bool exit = false;
     struct torrent *torrents_list = NULL;
@@ -42,15 +42,15 @@ int main(){
 
     while(!exit){
         if(ctx.current_windows_state == SEARCH){
-            gui_cleanup(&ctx);
             torrents_cleanup(torrents_list);
+            torrents_list = NULL;
             wgetnstr(ctx.win_search_bar,user_search_input,MAX_INPUT_SIZE);
             torrents_list = search(curl_handle,user_search_input, log_file);
             if(!torrents_list){
                 goto cleanup;
             }
             ctx.current_windows_state = LIST_TORRENTS;
-            if(gui_create_menu(torrents_list,&ctx) == -1){
+            if(gui_create_menu(torrents_list,&ctx) != 0){
                 fprintf(log_file, "[!] Failed to create menu\n");
                 goto cleanup;
             }
@@ -77,6 +77,7 @@ int main(){
 				break;
             case 10: 
                 download(curl_handle,item_name(current_item(ctx.menu)),log_file);
+                ctx.current_windows_state = SEARCH;
                 break;
             default:
         }
