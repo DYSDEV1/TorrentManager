@@ -9,7 +9,7 @@ struct torrent* parse(struct curl_response *curl_res){
     
     char* line = curl_res->html;
     while((line = strstr(cp_html,HTML_INDICATOR)) != NULL){
-        if(count >= 10){
+        if(count >= 20){
             break;
         }
         struct torrent *curr = malloc(sizeof(struct torrent));

@@ -8,7 +8,7 @@ void gui_init(){
 	keypad(stdscr, TRUE);		
 }
 
-void gui_cleanup(struct ctx *ctx){
+void gui_menu_cleanup(struct ctx *ctx){
     if(ctx->menu){
         unpost_menu(ctx->menu);
         free_menu(ctx->menu);
@@ -25,11 +25,6 @@ void gui_cleanup(struct ctx *ctx){
         ctx->items = NULL;
         ctx->nb_items = 0;
     }
-    delwin(ctx->win_search_bar);
-    delwin(ctx->win_torrent_list);
-    ctx->win_search_bar = NULL;
-    ctx->win_torrent_list = NULL;
-    endwin();
 }
 
 int gui_create_window_search_bar(struct ctx *ctx){
@@ -41,40 +36,25 @@ int gui_create_window_search_bar(struct ctx *ctx){
         return -1;
     }
     ctx->win_search_bar = win_search_bar;
-    box(win_search_bar,0,0);
-    mvwprintw(win_search_bar,0,1,"search");
-    wmove(win_search_bar, 1, 1);
-
     return 0;
   
 }
 
-
-int gui_create_window_torrent_list(struct ctx *ctx){
-    int width, height;
-    getmaxyx(stdscr,height,width);
-    WINDOW *win_torrent_list = newwin((height - SB_HEIGHT-2),width,SB_Y+2,0);
-    if(win_torrent_list == NULL){
-        fprintf(stderr,"[!] Failed to create window\n");
-        return -1;
-    }
-    ctx->win_torrent_list = win_torrent_list;
-    box(win_torrent_list,0,0);
-    mvwprintw(win_torrent_list,0,1,"torrent list");
-    return 0;
-   
-}
-void gui_draw_windows(struct ctx *ctx){
-    wrefresh(ctx->win_torrent_list);
+void gui_draw_search_bar(struct ctx *ctx){
+    werase(ctx->win_search_bar);
+    box(ctx->win_search_bar,0,0);
+    mvwprintw(ctx->win_search_bar,0,1,"search");
+    wmove(ctx->win_search_bar, 1, 1);
     wrefresh(ctx->win_search_bar);
-    ctx->current_windows_state = SEARCH;
 }
+
 
 
 int gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
     int count = 0;
     ctx->nb_items = 0;
     int code_function_return = 0;
+    int width,height;
     struct torrent *cp_tl = torrents_list;
     while(cp_tl != NULL){
         ctx->nb_items ++;
@@ -101,6 +81,9 @@ int gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
         code_function_return = -1;
         goto Cleanup;
     }
+
+    //create window
+    set_menu_format(ctx->menu,MAX_MENU_SIZE,1);
     post_menu(ctx->menu);
     refresh();
 

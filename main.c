@@ -13,7 +13,6 @@ int main(){
     char user_search_input[MAX_INPUT_SIZE];
     bool exit = false;
     struct torrent *torrents_list = NULL;
-    
     log_file = fopen("logs.txt","w");
 
     if(log_file == NULL){
@@ -32,16 +31,17 @@ int main(){
 
 
     gui_init();
+    int max_height,max_width;
+    getmaxyx(stdscr,max_height,max_width);
     if(gui_create_window_search_bar(&ctx) != 0){
         goto cleanup;
     }
-    if(gui_create_window_torrent_list(&ctx) != 0){
-        goto cleanup;
-    }
-    gui_draw_windows(&ctx);
 
     while(!exit){
         if(ctx.current_windows_state == SEARCH){
+            gui_menu_cleanup(&ctx);
+            refresh();
+            gui_draw_search_bar(&ctx);  
             torrents_cleanup(torrents_list);
             torrents_list = NULL;
             wgetnstr(ctx.win_search_bar,user_search_input,MAX_INPUT_SIZE);
@@ -81,17 +81,24 @@ int main(){
                 break;
             default:
         }
+        mvprintw((max_height-2),3,item_description(current_item(ctx.menu)));
+        refresh();
 
         
     }
 
     cleanup:
-        gui_cleanup(&ctx);
+        gui_menu_cleanup(&ctx);
         torrents_cleanup(torrents_list);
         if(log_file)
             fclose(log_file);
         if(curl_handle)
             curl_easy_cleanup(curl_handle);
+        delwin(ctx.win_search_bar);
+        ctx.win_search_bar = NULL;
+        delwin(ctx.win_torrent_list);
+        ctx.win_torrent_list = NULL;
+        endwin();
     
     return 0; 
 }

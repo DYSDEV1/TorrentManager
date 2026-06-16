@@ -10,6 +10,7 @@
 #define SB_HEIGHT 3
 #define SB_WIDTH  40 
 #define SB_Y 4
+#define MAX_MENU_SIZE 10
 
 enum win_state{
     SEARCH,
@@ -27,12 +28,13 @@ struct ctx{
 };
 
 void gui_init();
-void gui_cleanup(struct ctx *ctx);
+void gui_menu_cleanup(struct ctx *ctx);
 
 int gui_create_window_search_bar(struct ctx *ctx);
 int gui_create_window_torrent_list(struct ctx *ctx);
 
 void gui_draw_windows(struct ctx *ctx);
+void gui_draw_search_bar(struct ctx *ctx);
 
 int gui_use_search_bar(struct ctx *ctx);
 
