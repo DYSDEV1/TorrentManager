@@ -31,9 +31,12 @@ int main(){
 
 
     gui_init();
-    int max_height,max_width;
-    getmaxyx(stdscr,max_height,max_width);
+    getmaxyx(stdscr,ctx.height_max,ctx.width_max);
+
     if(gui_create_window_search_bar(&ctx) != 0){
+        goto cleanup;
+    }
+    if(gui_create_window_description(&ctx) != 0){
         goto cleanup;
     }
 
@@ -55,6 +58,7 @@ int main(){
                 goto cleanup;
             }
         }
+        gui_draw_window_description(&ctx);
         ch  = getch();
         switch(ch){
             case '\x1b':
@@ -81,10 +85,15 @@ int main(){
                 break;
             default:
         }
-        mvprintw((max_height-2),3,item_description(current_item(ctx.menu)));
-        refresh();
-
-        
+        ITEM *item = current_item(ctx.menu);
+        struct torrent *torrent = item_userptr(item);
+        if(!torrent){
+            fprintf(log_file,"[!] Failed to get item ptr\n");
+            goto cleanup;
+        }
+        wclear(ctx.win_description);
+        mvwprintw(ctx.win_description, 1, 1, " Description: %s \n seeders:%s\n size:%s",torrent->information, torrent->seeders,torrent->size);
+ 
     }
 
     cleanup:
@@ -96,8 +105,8 @@ int main(){
             curl_easy_cleanup(curl_handle);
         delwin(ctx.win_search_bar);
         ctx.win_search_bar = NULL;
-        delwin(ctx.win_torrent_list);
-        ctx.win_torrent_list = NULL;
+        delwin(ctx.win_description);
+        ctx.win_description = NULL;
         endwin();
     
     return 0; 

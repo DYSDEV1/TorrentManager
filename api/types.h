@@ -8,8 +8,10 @@ struct curl_response {
 };
 
 struct torrent {
-    char* id;
+    char *id;
     char *information;
+    char *seeders;
+    char *size;
     struct torrent *next;
 };
 

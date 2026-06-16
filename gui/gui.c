@@ -28,9 +28,7 @@ void gui_menu_cleanup(struct ctx *ctx){
 }
 
 int gui_create_window_search_bar(struct ctx *ctx){
-    int width,height;
-    getmaxyx(stdscr,height,width);
-    WINDOW *win_search_bar = newwin(SB_HEIGHT, SB_WIDTH,2,(width - SB_WIDTH)/2);
+    WINDOW *win_search_bar = newwin(SB_HEIGHT, SB_WIDTH,2,(ctx->width_max - SB_WIDTH)/2);
     if(win_search_bar == NULL){
         fprintf(stderr,"[!] Failed to create window\n");
         return -1;
@@ -40,6 +38,22 @@ int gui_create_window_search_bar(struct ctx *ctx){
   
 }
 
+int gui_create_window_description(struct ctx *ctx){
+    WINDOW *win_desc = newwin(8,ctx->width_max,ctx->height_max - 8,0);
+    if(win_desc == NULL){
+        fprintf(stderr,"[!] Failed to create window\n");
+        return -1;
+    }
+    ctx->win_description = win_desc;
+    return 0;
+}
+
+void gui_draw_window_description(struct ctx *ctx){
+    box(ctx->win_description,0,0);
+    mvwprintw(ctx->win_description,0,1,"Informations");
+    wrefresh(ctx->win_description);
+}
+
 void gui_draw_search_bar(struct ctx *ctx){
     werase(ctx->win_search_bar);
     box(ctx->win_search_bar,0,0);
@@ -47,6 +61,8 @@ void gui_draw_search_bar(struct ctx *ctx){
     wmove(ctx->win_search_bar, 1, 1);
     wrefresh(ctx->win_search_bar);
 }
+
+
 
 
 
@@ -72,6 +88,7 @@ int gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
             code_function_return = -1;
             goto Cleanup;
         }
+        set_item_userptr(ctx->items[count],cp_tl);
         count ++;
         cp_tl = cp_tl->next;
     }
@@ -82,7 +99,6 @@ int gui_create_menu(struct torrent *torrents_list,struct ctx *ctx){
         goto Cleanup;
     }
 
-    //create window
     set_menu_format(ctx->menu,MAX_MENU_SIZE,1);
     post_menu(ctx->menu);
     refresh();
