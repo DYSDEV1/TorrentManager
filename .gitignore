@@ -1,6 +1,9 @@
 # Ignore everything
 *
 
+#Allow md file
+!*.md
+
 # Allow directories so Git can traverse them
 !*/
 

@@ -6,28 +6,45 @@
 
 int main(){
     FILE *log_file;
-    curl_global_init(CURL_GLOBAL_ALL);
-    CURL *curl_handle = curl_easy_init();
     struct ctx ctx = {0};
     int ch;
     char user_search_input[MAX_INPUT_SIZE];
     bool exit = false;
     struct torrent *torrents_list = NULL;
-    log_file = fopen("logs.txt","w");
 
+    log_file = fopen("logs.txt","w");
     if(log_file == NULL){
         goto cleanup;
     }
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    CURL *curl_handle_rutracker = curl_easy_init();
+    if(!curl_handle_rutracker){
+        fprintf(log_file,"[!] Failed to create curl handle for rutracker\n");
+        goto cleanup;
+    }
+    CURL *curl_handle_qbitorrent = curl_easy_init();
+    if(!curl_handle_qbitorrent){
+        fprintf(log_file,"[!] Failed to create curl handle for qbitorrent\n");
+        goto cleanup;
+    }
+
 
     if(loadEnv() != 0){
         fprintf(log_file, "[!] Failed to set env variables\n");
         goto cleanup;
     }
-
-    if(authenticate(curl_handle,getenv("username_rutracker"),getenv("password_rutracker"),log_file) != 0){
-        fprintf(log_file,"[!] Failed to authenticate");
+    
+    if(authenticate(curl_handle_rutracker,FMT_RUTRACKER,getenv("username_rutracker"),getenv("password_rutracker"),log_file, COOKIE_FILENAME_RUTRACKER, ENDPOINT_LOGIN_RUTRACKER,COOKIE_RUTRACKER) != 0){
+        fprintf(log_file,"[!] Failed to authenticate to rutorrent\n");
         goto cleanup;
     }
+
+    if(authenticate(curl_handle_qbitorrent,FMT_QBITTORRENT,getenv("username_qbittorrent"),getenv("password_qbittorrent"),log_file,COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT, COOKIE_QBITTORRENT) != 0){
+        fprintf(log_file,"[!] Failed to authenticate to qbitorrent\n");
+        goto cleanup;
+    }
+
 
 
     gui_init();
@@ -48,7 +65,7 @@ int main(){
             torrents_cleanup(torrents_list);
             torrents_list = NULL;
             wgetnstr(ctx.win_search_bar,user_search_input,MAX_INPUT_SIZE);
-            torrents_list = search(curl_handle,user_search_input, log_file);
+            torrents_list = search(curl_handle_rutracker,user_search_input, log_file);
             if(!torrents_list){
                 goto cleanup;
             }
@@ -80,7 +97,14 @@ int main(){
 				menu_driver(ctx.menu, REQ_SCR_UPAGE);
 				break;
             case 10: 
-                download(curl_handle,item_name(current_item(ctx.menu)),log_file);
+                if(download(curl_handle_rutracker,item_name(current_item(ctx.menu)),log_file) != 0){
+                    fprintf(log_file,"[!] Failed to download torrent\n");
+                    goto cleanup;
+                }
+                if(uploadToServer(curl_handle_qbitorrent,item_name(current_item(ctx.menu)),log_file) != 0){
+                    fprintf(log_file,"[!] Failed to upload to qbittorrent\n");
+                    goto cleanup;
+                }
                 ctx.current_windows_state = SEARCH;
                 break;
             default:
@@ -101,8 +125,8 @@ int main(){
         torrents_cleanup(torrents_list);
         if(log_file)
             fclose(log_file);
-        if(curl_handle)
-            curl_easy_cleanup(curl_handle);
+        if(curl_handle_rutracker)
+            curl_easy_cleanup(curl_handle_rutracker);
         delwin(ctx.win_search_bar);
         ctx.win_search_bar = NULL;
         delwin(ctx.win_description);

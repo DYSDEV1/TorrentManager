@@ -15,4 +15,9 @@ struct torrent {
     struct torrent *next;
 };
 
+enum cookie_type{
+    COOKIE_RUTRACKER,
+    COOKIE_QBITTORRENT
+};
+
 #endif
