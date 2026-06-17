@@ -20,17 +20,21 @@ OBJS = \
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-$(BUILD_DIR)/main.o: main.c $(API_DIR)/api.h $(API_DIR)/env.h
+$(BUILD_DIR)/main.o: main.c $(API_DIR)/api.h $(API_DIR)/env.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/api.o: $(API_DIR)/api.c
+$(BUILD_DIR)/api.o: $(API_DIR)/api.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/env.o: $(API_DIR)/env.c
+$(BUILD_DIR)/env.o: $(API_DIR)/env.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/gui.o: $(GUI_DIR)/gui.c $(GUI_DIR)/gui.h
+$(BUILD_DIR)/gui.o: $(GUI_DIR)/gui.c $(GUI_DIR)/gui.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/utils.o: $(API_DIR)/utils.c $(API_DIR)/utils.h
-	$(CC) $(CFLAGS) -c $< -o $@	
+$(BUILD_DIR)/utils.o: $(API_DIR)/utils.c $(API_DIR)/utils.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
