@@ -1,6 +1,7 @@
 #include "api/api.h"
 #include "api/env.h"
 #include "gui/gui.h"
+#include <pthread.h>
 
 #define MAX_INPUT_SIZE 256
 
@@ -28,7 +29,11 @@ int main(){
         fprintf(log_file,"[!] Failed to create curl handle for qbitorrent\n");
         goto cleanup;
     }
-
+    CURL *curl_handle_sftp = curl_easy_init();
+    if(!curl_handle_sftp){
+        fprintf(log_file,"[!] Failed to create curl handle for sftp\n");
+        goto cleanup;
+    }
 
     if(loadEnv() != 0){
         fprintf(log_file, "[!] Failed to set env variables\n");
@@ -97,14 +102,32 @@ int main(){
 				menu_driver(ctx.menu, REQ_SCR_UPAGE);
 				break;
             case 10: 
-                if(download(curl_handle_rutracker,item_name(current_item(ctx.menu)),log_file) != 0){
+                struct torrent *torrent = item_userptr(current_item(ctx.menu));
+                if(!torrent){
+                    fprintf(log_file,"[!] Failed to get item ptr\n");
+                    goto cleanup;
+                }            
+                if(download(curl_handle_rutracker,torrent->id,log_file) != 0){
                     fprintf(log_file,"[!] Failed to download torrent\n");
                     goto cleanup;
                 }
-                if(uploadToServer(curl_handle_qbitorrent,item_name(current_item(ctx.menu)),log_file) != 0){
+                if(uploadToServer(curl_handle_qbitorrent,torrent->id,log_file) != 0){
                     fprintf(log_file,"[!] Failed to upload to qbittorrent\n");
                     goto cleanup;
                 }
+                if(retrieveTorrentInfo(curl_handle_qbitorrent,torrent->id,torrent->name,torrent->hash,torrent->full_path,log_file) != 0){
+                    fprintf(log_file,"[!] Failed to retrieve hash\n");
+                    goto cleanup;
+                }
+                if(retrieveUploadProgression(curl_handle_qbitorrent,torrent->hash,log_file) != 0){
+                    fprintf(log_file,"[!] Failed to retrieve torrent upload progression\n");
+                    goto cleanup;
+                }
+                if(downloadFromServer(curl_handle_sftp,torrent->name,torrent->full_path,log_file) != 0){
+                    fprintf(log_file,"[!] Failed to download file from sftp\n");
+                    goto cleanup;
+                }
+
                 ctx.current_windows_state = SEARCH;
                 break;
             default:

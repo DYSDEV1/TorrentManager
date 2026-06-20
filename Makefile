@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -g -Wall -Wextra -Wconversion -Wsign-conversion -fsanitize=address,undefined
-LDFLAGS = -lcurl -lncurses -lmenu -fsanitize=address,undefined
+LDFLAGS = -lcurl -lncurses -lmenu -fsanitize=address,undefined -lpthread
 
 API_DIR = api
 GUI_DIR = gui

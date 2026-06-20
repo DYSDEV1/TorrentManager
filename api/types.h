@@ -9,9 +9,12 @@ struct curl_response {
 
 struct torrent {
     char *id;
+    char name[128];
     char *information;
     char *seeders;
     char *size;
+    char hash[65];
+    char full_path[4096];
     struct torrent *next;
 };
 

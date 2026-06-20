@@ -10,7 +10,6 @@ int loadEnv(){
         fprintf(stderr,"[!] Failed to load file env\n");
         return -1;
     }
-  
     while(getline(&line,&line_size,env_file) != -1){
 
         line[strcspn(line,"\r\n")] = '\0';
