@@ -123,11 +123,10 @@ int main(){
                     fprintf(log_file,"[!] Failed to retrieve torrent upload progression\n");
                     goto cleanup;
                 }
-                if(downloadFromServer(curl_handle_sftp,torrent->name,torrent->full_path,log_file) != 0){
+                if(downloadFromServer(torrent->full_path,getenv("download_path"),log_file) != 0){
                     fprintf(log_file,"[!] Failed to download file from sftp\n");
                     goto cleanup;
                 }
-
                 ctx.current_windows_state = SEARCH;
                 break;
             default:

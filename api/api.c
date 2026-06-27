@@ -14,14 +14,15 @@ int saveHtmlToFile(FILE *html_file,struct curl_response *curl_res){
 bool isLogged(CURL *curl_handle, enum cookie_type ct){
     struct curl_slist *cookies;
     long expiration_date;
-    bool code_function_return = true;
+    bool code_function_return = false;
     curl_easy_getinfo(curl_handle,CURLINFO_COOKIELIST, &cookies);
     struct curl_slist *cookies_ptr = cookies;
+    if(!cookies)
+        return false;
     while(cookies != NULL){
         if(ct == COOKIE_RUTRACKER){
             if(strstr(cookies->data,"bb_session") != 0){
                 if(sscanf(cookies->data,"%*s %*s %*s %*s %ld",&expiration_date) != 1){
-                    code_function_return = false;
                     goto cleanup;
                 }
                 if(expiration_date > (long)time(NULL)){
@@ -32,13 +33,10 @@ bool isLogged(CURL *curl_handle, enum cookie_type ct){
             }
         }
         if(ct == COOKIE_QBITTORRENT){
-            if(strstr(cookies->data,"SID") != 0){
-                code_function_return = true;
-                goto cleanup;
-            }
-                
+            if(strstr(cookies->data,"SID") != 0)
+                return true;
         }
-
+      
         cookies = cookies->next;
     }
     cleanup: 
@@ -131,7 +129,7 @@ int authenticate(CURL *curl_handle,const char* fmt,const char* user,const char* 
             code_function_return = -1;
             goto cleanup;
         }
-        if(isLogged(curl_handle, ct)){
+        if(ct == COOKIE_RUTRACKER && isLogged(curl_handle, ct)){
             fprintf(log_file,"[+] Already logged, cookies still actives\n");
             goto cleanup;
         }
@@ -565,7 +563,7 @@ int retrieveTorrentInfo(CURL *curl_handle,char* torrent_id,char* torrent_name,ch
     }
     name_ptr += strlen(HTML_INDICATOR_TORRENT_NAME);
     if((sscanf(name_ptr,SSCANF_EXTRACT_TORRENT_NAME,torrent_name) != 1) || !torrent_name){
-        fprintf(log_file,"[!] Failed to retrieve hash\n");
+        fprintf(log_file,"[!] Failed to retrieve torrent name\n");
         code_function_return = -1;
         goto cleanup;
     }
@@ -685,100 +683,30 @@ int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file){
 }
 
 
-int downloadFromServer(CURL *curl_handle,char* torrent_name,char* torrent_path, FILE *log_file){
-    CURLcode code_return_curl;
-    int code_function_return = 0;
-    char* full_path_torrent = NULL;
-    CURLU *url = NULL;
-    CURLUcode url_code;
-    FILE *torrent = NULL;
-    
-    url = curl_url();
-    if((url_code = curl_url_set(url,CURLUPART_SCHEME,"sftp",0)) != CURLUE_OK){
-        fprintf(log_file,"[!] Failed to setup scheme in url\n");
-        code_function_return = -1;
-        goto cleanup;
+int downloadFromServer(char* torrent_path,char* download_path,FILE *log_file){
+    char* full_rsync_path = NULL;
+    if((!torrent_path) || (!download_path)){
+        return -1;
     }
-    if((url_code = curl_url_set(url,CURLUPART_HOST,ENDPOINT_SFTP,0)) != CURLUE_OK){
-        fprintf(log_file,"[!] Failed to setup host in url\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-    if((url_code = curl_url_set(url,CURLUPART_PATH,torrent_path,CURLU_URLENCODE)) != CURLUE_OK){
-        fprintf(log_file,"[!] Failed to setup path in url\n");
-        code_function_return = -1;  
-        goto cleanup;
-    }
-    if((url_code = curl_url_get(url,CURLUPART_URL,&full_path_torrent,0)) != CURLUE_OK){
-        fprintf(log_file,"[!] Failed to retrieve complete url\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
+    int nb_required_bytes = snprintf(NULL,0,"%s:%s",ENDPOINT_RSYNC,torrent_path);
 
 
-    if((code_return_curl = curl_easy_setopt(curl_handle,CURLOPT_URL,full_path_torrent)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to setup url\n");
-        code_function_return = -1;
-        goto cleanup;
+    if(nb_required_bytes < 0){
+        fprintf(log_file,"[!] Failed to alloc rsync path\n");
+        return -1;
     }
-    const char *user = getenv("username_sftp");
-    const char *pass = getenv("password_sftp");
+    full_rsync_path = (char*)malloc((size_t)nb_required_bytes + 1);
 
-    if (!user || !pass) {
-        fprintf(log_file, "[!] Missing SFTP credentials\n");
-        code_function_return = -1;
-        goto cleanup;
+    if(!full_rsync_path){
+        fprintf(log_file,"[!] Failed to alloc rsync path\n");
+        return -1;
     }
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_USERNAME,user)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to setup user sftp\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_PASSWORD,pass)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to setup password sftp\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleDownloadTorrent)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set writefunction.\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-    curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
-    torrent = fopen(torrent_name,"wb");
-    if(!torrent){
-        fprintf(log_file, "[!] Failed to create torrent file\n");
-        code_function_return = -1;
-        goto cleanup;
+    snprintf(full_rsync_path,(nb_required_bytes+1),"%s:%s",ENDPOINT_RSYNC,torrent_path);
+
+    if(execlp("rsync","rsync","-a",full_rsync_path,download_path, NULL) == -1){
+        fprintf(log_file,"Failed to retrieve the movie\n");
+        return -1;
     }
 
-     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)torrent)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set result structure\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-
-    code_return_curl = curl_easy_perform(curl_handle);
-
-    if(code_return_curl != CURLE_OK){
-        fprintf(log_file,"[!] Failed to execute request\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-
-
-
-    cleanup:
-        curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, NULL);
-        curl_easy_setopt(curl_handle, CURLOPT_POST, 0L);
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, NULL);
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL);
-        if(full_path_torrent)
-            curl_free(full_path_torrent);
-        if(torrent)
-            fclose(torrent);
-        if(url)
-            curl_url_cleanup(url);
-
-    return code_function_return;
+    return 0;
 }

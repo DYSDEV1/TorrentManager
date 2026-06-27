@@ -24,7 +24,7 @@
 #define ENDPOINT_UPLOAD_TORRENT "https://kit.seedhost.eu/temp432456/qbittorrent/api/v2/torrents/add"
 #define ENDPOINT_GET_HASH "https://kit.seedhost.eu/temp432456/qbittorrent/api/v2/torrents/info?tag=%s"
 #define ENDPOINT_GET_TORRENT_PROGRESSION "https://kit.seedhost.eu/temp432456/qbittorrent/api/v2/torrents/info?hashes=%s"
-#define ENDPOINT_SFTP "kit.seedhost.eu"
+#define ENDPOINT_RSYNC "temp432456@kit.seedhost.eu"
 #define COOKIE_FILENAME_RUTRACKER "rutracker_cookie.txt"
 #define COOKIE_FILENAME_QBITTORRENT "qbitorrent_cookie.txt"
 
@@ -49,7 +49,7 @@ int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file);
 
 int retrieveTorrentInfo(CURL *curl_handle,char* torrent_id,char* torrent_name,char* hash,char* torrent_path,FILE *log_file);
 
-int downloadFromServer(CURL *curl_handle,char* torrent_name,char* torrent_path, FILE *log_file);
+int downloadFromServer(char* torrent_path,char *download_path,FILE *log_file);
 
 
 #endif
