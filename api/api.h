@@ -24,7 +24,7 @@
 #define ENDPOINT_UPLOAD_TORRENT "https://kit.seedhost.eu/temp432456/qbittorrent/api/v2/torrents/add"
 #define ENDPOINT_GET_HASH "https://kit.seedhost.eu/temp432456/qbittorrent/api/v2/torrents/info?tag=%s"
 #define ENDPOINT_GET_TORRENT_PROGRESSION "https://kit.seedhost.eu/temp432456/qbittorrent/api/v2/torrents/info?hashes=%s"
-#define ENDPOINT_SFTP "sftp://kit.seedhost.eu%s"
+#define ENDPOINT_SFTP "kit.seedhost.eu"
 #define COOKIE_FILENAME_RUTRACKER "rutracker_cookie.txt"
 #define COOKIE_FILENAME_QBITTORRENT "qbitorrent_cookie.txt"
 

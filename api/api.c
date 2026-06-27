@@ -14,31 +14,36 @@ int saveHtmlToFile(FILE *html_file,struct curl_response *curl_res){
 bool isLogged(CURL *curl_handle, enum cookie_type ct){
     struct curl_slist *cookies;
     long expiration_date;
+    bool code_function_return = true;
     curl_easy_getinfo(curl_handle,CURLINFO_COOKIELIST, &cookies);
     struct curl_slist *cookies_ptr = cookies;
     while(cookies != NULL){
         if(ct == COOKIE_RUTRACKER){
             if(strstr(cookies->data,"bb_session") != 0){
                 if(sscanf(cookies->data,"%*s %*s %*s %*s %ld",&expiration_date) != 1){
-                    curl_slist_free_all(cookies_ptr);
-                    return false;
+                    code_function_return = false;
+                    goto cleanup;
                 }
                 if(expiration_date > (long)time(NULL)){
-                    curl_slist_free_all(cookies_ptr);
-                    return true;
+                    code_function_return = true;
+                    goto cleanup;
                 
                 }
             }
         }
         if(ct == COOKIE_QBITTORRENT){
-            if(strstr(cookies->data,"SID") != 0)
-                return true;
+            if(strstr(cookies->data,"SID") != 0){
+                code_function_return = true;
+                goto cleanup;
+            }
+                
         }
 
         cookies = cookies->next;
     }
-    curl_slist_free_all(cookies_ptr);
-    return false;
+    cleanup: 
+        curl_slist_free_all(cookies_ptr);
+    return code_function_return;
 }
 
 
@@ -105,30 +110,36 @@ int authenticate(CURL *curl_handle,const char* fmt,const char* user,const char* 
     char *encoded_password = NULL;
     if(!user || !password){
         fprintf(log_file,"[!] User or pasword NULL\n");
+        code_function_return = -1;
         goto cleanup;
 
     }
     if((encoded_user = curl_easy_escape(curl_handle,user,(int)strlen(user))) == NULL){
         fprintf(log_file,"[!] Failed to encode user\n");
+        code_function_return = -1;
         goto cleanup;
     }
     if((encoded_password = curl_easy_escape(curl_handle,password,(int)strlen(password))) == NULL){
         fprintf(log_file,"[!] Failed to encode password\n");
+        code_function_return = -1;
         goto cleanup;
     }
 
     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_COOKIEFILE,cookie_file_name)) == CURLE_OK){
         if(curl_easy_setopt(curl_handle, CURLOPT_COOKIELIST, "RELOAD") != CURLE_OK){
             fprintf(log_file, "[!] Failed to reload cookies\n");
+            code_function_return = -1;
+            goto cleanup;
         }
         if(isLogged(curl_handle, ct)){
             fprintf(log_file,"[+] Already logged, cookies still actives\n");
-            return CURLE_OK;
+            goto cleanup;
         }
     }
 
     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,endpoint_url)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set url.\n");
+        code_function_return = -1;
         goto cleanup;
     }
     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse)) != CURLE_OK){
@@ -636,7 +647,6 @@ int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file){
         goto cleanup;
     }
     while(progress != 1){
-        sleep(5);
         code_return_curl = curl_easy_perform(curl_handle);
         if(code_return_curl != CURLE_OK){
             fprintf(log_file,"[!] Failed to execute request\n");
@@ -654,6 +664,12 @@ int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file){
             code_function_return = -1;
             goto cleanup;
         }
+        if(curl_res.html){
+            free(curl_res.html);
+            curl_res.html = NULL;
+            curl_res.size = 0;
+        }
+        sleep(2);
 
     }
     cleanup:
@@ -677,6 +693,28 @@ int downloadFromServer(CURL *curl_handle,char* torrent_name,char* torrent_path, 
     CURLUcode url_code;
     FILE *torrent = NULL;
     
+    url = curl_url();
+    if((url_code = curl_url_set(url,CURLUPART_SCHEME,"sftp",0)) != CURLUE_OK){
+        fprintf(log_file,"[!] Failed to setup scheme in url\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
+    if((url_code = curl_url_set(url,CURLUPART_HOST,ENDPOINT_SFTP,0)) != CURLUE_OK){
+        fprintf(log_file,"[!] Failed to setup host in url\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
+    if((url_code = curl_url_set(url,CURLUPART_PATH,torrent_path,CURLU_URLENCODE)) != CURLUE_OK){
+        fprintf(log_file,"[!] Failed to setup path in url\n");
+        code_function_return = -1;  
+        goto cleanup;
+    }
+    if((url_code = curl_url_get(url,CURLUPART_URL,&full_path_torrent,0)) != CURLUE_OK){
+        fprintf(log_file,"[!] Failed to retrieve complete url\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
+
 
     if((code_return_curl = curl_easy_setopt(curl_handle,CURLOPT_URL,full_path_torrent)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to setup url\n");

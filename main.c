@@ -150,11 +150,16 @@ int main(){
             fclose(log_file);
         if(curl_handle_rutracker)
             curl_easy_cleanup(curl_handle_rutracker);
+        if(curl_handle_qbitorrent)
+            curl_easy_cleanup(curl_handle_qbitorrent);
+        if(curl_handle_sftp)
+            curl_easy_cleanup(curl_handle_sftp);
         delwin(ctx.win_search_bar);
         ctx.win_search_bar = NULL;
         delwin(ctx.win_description);
         ctx.win_description = NULL;
         endwin();
+        curl_global_cleanup();
     
     return 0; 
 }
