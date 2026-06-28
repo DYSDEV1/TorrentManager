@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <sys/wait.h>
 #include "types.h"
 #include "utils.h"
 

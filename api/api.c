@@ -17,8 +17,9 @@ bool isLogged(CURL *curl_handle, enum cookie_type ct){
     bool code_function_return = false;
     curl_easy_getinfo(curl_handle,CURLINFO_COOKIELIST, &cookies);
     struct curl_slist *cookies_ptr = cookies;
-    if(!cookies)
-        return false;
+    if(!cookies){
+        goto cleanup;
+    }
     while(cookies != NULL){
         if(ct == COOKIE_RUTRACKER){
             if(strstr(cookies->data,"bb_session") != 0){
@@ -34,7 +35,7 @@ bool isLogged(CURL *curl_handle, enum cookie_type ct){
         }
         if(ct == COOKIE_QBITTORRENT){
             if(strstr(cookies->data,"SID") != 0)
-                return true;
+                code_function_return = true;
         }
       
         cookies = cookies->next;
@@ -685,28 +686,49 @@ int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file){
 
 int downloadFromServer(char* torrent_path,char* download_path,FILE *log_file){
     char* full_rsync_path = NULL;
+    int code_function_return = 0;
+    pid_t pid_rsync;
+
     if((!torrent_path) || (!download_path)){
-        return -1;
+        code_function_return = -1;
+        goto cleanup;
     }
     int nb_required_bytes = snprintf(NULL,0,"%s:%s",ENDPOINT_RSYNC,torrent_path);
 
 
     if(nb_required_bytes < 0){
         fprintf(log_file,"[!] Failed to alloc rsync path\n");
-        return -1;
+        code_function_return = -1;
+        goto cleanup;
     }
     full_rsync_path = (char*)malloc((size_t)nb_required_bytes + 1);
 
     if(!full_rsync_path){
         fprintf(log_file,"[!] Failed to alloc rsync path\n");
-        return -1;
+        code_function_return = -1;
+        goto cleanup;
     }
-    snprintf(full_rsync_path,(nb_required_bytes+1),"%s:%s",ENDPOINT_RSYNC,torrent_path);
-
-    if(execlp("rsync","rsync","-a",full_rsync_path,download_path, NULL) == -1){
-        fprintf(log_file,"Failed to retrieve the movie\n");
-        return -1;
+    snprintf(full_rsync_path,((size_t)nb_required_bytes+1),"%s:%s",ENDPOINT_RSYNC,torrent_path);
+    
+    pid_rsync = fork();
+    if(pid_rsync < 0){
+        fprintf(log_file, "[!] Failed to fork\n");
+        code_function_return = -1;
+        goto cleanup;
     }
+    if(pid_rsync == 0){
 
-    return 0;
+        if(execlp("rsync","rsync","-a",full_rsync_path,download_path, NULL) == -1){
+            fprintf(log_file,"Failed to retrieve the movie\n");
+            exit(EXIT_FAILURE);
+        }
+        exit(EXIT_SUCCESS);
+    }
+    wait(&code_function_return);
+    
+    cleanup:
+        if(full_rsync_path)
+            free(full_rsync_path);
+
+    return code_function_return;
 }

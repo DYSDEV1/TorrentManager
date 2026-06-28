@@ -27,6 +27,22 @@ void gui_menu_cleanup(struct ctx *ctx){
     }
 }
 
+int gui_create_window_notification(struct ctx *ctx,const char* notification){
+    WINDOW *win_notif = newwin(1,ctx->width_max,ctx->height_max - 1,0);
+    if(win_notif == NULL){
+        fprintf(stderr, "[!] Failed to create window\n");
+        return -1;
+    }
+    mvwprintw(win_notif,0,1,notification);
+    wrefresh(win_notif);
+    sleep(2);
+    werase(win_notif);
+    wrefresh(win_notif);
+    delwin(win_notif);
+    return 0;
+
+}
+
 int gui_create_window_search_bar(struct ctx *ctx){
     WINDOW *win_search_bar = newwin(SB_HEIGHT, SB_WIDTH,2,(ctx->width_max - SB_WIDTH)/2);
     if(win_search_bar == NULL){

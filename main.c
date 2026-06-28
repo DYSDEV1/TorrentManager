@@ -4,6 +4,8 @@
 #include <pthread.h>
 
 #define MAX_INPUT_SIZE 256
+#define MAX_THREAD 5
+
 
 int main(){
     FILE *log_file;
@@ -22,6 +24,8 @@ int main(){
     CURL *curl_handle_rutracker = curl_easy_init();
     if(!curl_handle_rutracker){
         fprintf(log_file,"[!] Failed to create curl handle for rutracker\n");
+        gui_create_window_notification(&ctx,"[!] Failed to create curl handle for rutracker\n");
+
         goto cleanup;
     }
     CURL *curl_handle_qbitorrent = curl_easy_init();
@@ -72,7 +76,8 @@ int main(){
             wgetnstr(ctx.win_search_bar,user_search_input,MAX_INPUT_SIZE);
             torrents_list = search(curl_handle_rutracker,user_search_input, log_file);
             if(!torrents_list){
-                goto cleanup;
+                ctx.current_windows_state = SEARCH;
+                continue;
             }
             ctx.current_windows_state = LIST_TORRENTS;
             if(gui_create_menu(torrents_list,&ctx) != 0){
@@ -105,27 +110,38 @@ int main(){
                 struct torrent *torrent = item_userptr(current_item(ctx.menu));
                 if(!torrent){
                     fprintf(log_file,"[!] Failed to get item ptr\n");
-                    goto cleanup;
+                    ctx.current_windows_state = SEARCH;
+                    break;
                 }            
                 if(download(curl_handle_rutracker,torrent->id,log_file) != 0){
                     fprintf(log_file,"[!] Failed to download torrent\n");
-                    goto cleanup;
+                    gui_create_window_notification(&ctx,"[!] Failed to download torrent\n");
+                    ctx.current_windows_state = SEARCH;
+                    break;
                 }
                 if(uploadToServer(curl_handle_qbitorrent,torrent->id,log_file) != 0){
                     fprintf(log_file,"[!] Failed to upload to qbittorrent\n");
-                    goto cleanup;
+                    gui_create_window_notification(&ctx,"[!] Failed to upload to qbittorrent\n");
+                    ctx.current_windows_state = SEARCH;
+                    break;
                 }
                 if(retrieveTorrentInfo(curl_handle_qbitorrent,torrent->id,torrent->name,torrent->hash,torrent->full_path,log_file) != 0){
                     fprintf(log_file,"[!] Failed to retrieve hash\n");
-                    goto cleanup;
+                    gui_create_window_notification(&ctx,"[!] Failed to retrieve hash\n");
+                    ctx.current_windows_state = SEARCH;
+                    break;
                 }
                 if(retrieveUploadProgression(curl_handle_qbitorrent,torrent->hash,log_file) != 0){
                     fprintf(log_file,"[!] Failed to retrieve torrent upload progression\n");
-                    goto cleanup;
+                    gui_create_window_notification(&ctx,"[!] Failed to retrieve torrent upload progression\n");
+                    ctx.current_windows_state = SEARCH;
+                    break;
                 }
                 if(downloadFromServer(torrent->full_path,getenv("download_path"),log_file) != 0){
-                    fprintf(log_file,"[!] Failed to download file from sftp\n");
-                    goto cleanup;
+                    fprintf(log_file,"[!] Failed to download final content\n");
+                    gui_create_window_notification(&ctx,"[!] Failed to download final content\n");
+                    ctx.current_windows_state = SEARCH;
+                    break;
                 }
                 ctx.current_windows_state = SEARCH;
                 break;

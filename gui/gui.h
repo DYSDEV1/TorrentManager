@@ -5,6 +5,7 @@
 #include <menu.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "../api/types.h"
 
 #define SB_HEIGHT 3
@@ -39,6 +40,7 @@ int gui_create_window_description(struct ctx *ctx);
 void gui_draw_windows(struct ctx *ctx);
 void gui_draw_search_bar(struct ctx *ctx);
 void gui_draw_window_description(struct ctx *ctx);
+int gui_create_window_notification(struct ctx *ctx,const char* notification);
 
 
 int gui_use_search_bar(struct ctx *ctx);
