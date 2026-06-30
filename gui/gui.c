@@ -59,6 +59,52 @@ int gui_create_window_description(struct ctx *ctx){
     return 0;
 }
 
+int gui_create_window_tabs(struct ctx *ctx){
+    WINDOW *win_tabs = newwin(1,ctx->width_max,ctx->height_max - 1,0);
+    if(win_tabs == NULL){
+        fprintf(stderr,"[!] Failed to create window\n");
+        return -1;
+    }
+    ctx->win_tabs = win_tabs;
+    return 0;
+
+}
+
+int gui_create_window_downloads(struct ctx *ctx){
+    WINDOW *win_downloads = newwin(ctx->height_max-1,ctx->width_max,0,0);
+    if(win_downloads == NULL){
+        fprintf(stderr,"[!] Failed to create window\n");
+        return -1;
+    }
+    ctx->win_downloads = win_downloads;
+    return 0;
+}
+
+
+void gui_draw_window_tabs(struct ctx *ctx){
+    if(ctx->current_windows_state == SEARCH){
+        wattr_on(ctx->win_tabs,(A_BOLD|A_UNDERLINE),NULL);
+        mvwprintw(ctx->win_tabs,0,1,"Search");
+        wattr_off(ctx->win_tabs,(A_BOLD|A_UNDERLINE),NULL);
+    }else{
+        mvwprintw(ctx->win_tabs,0,1,"Search");
+    }
+    if(ctx->current_windows_state == RESULTS){
+        wattr_on(ctx->win_tabs,(A_BOLD|A_UNDERLINE),NULL);
+        mvwprintw(ctx->win_tabs,0,8,"Results");
+        wattr_off(ctx->win_tabs,(A_BOLD|A_UNDERLINE),NULL);
+    }else{
+        mvwprintw(ctx->win_tabs,0,8,"Results");
+    }
+    if(ctx->current_windows_state == DOWNLOADS){
+        wattr_on(ctx->win_tabs,(A_BOLD|A_UNDERLINE),NULL);
+        mvwprintw(ctx->win_tabs,0,16,"Downloads");
+        wattr_off(ctx->win_tabs,(A_BOLD|A_UNDERLINE),NULL);
+    }else{
+        mvwprintw(ctx->win_tabs,0,16,"Downloads");
+    }
+    wrefresh(ctx->win_tabs);
+}
 void gui_draw_window_description(struct ctx *ctx){
     box(ctx->win_description,0,0);
     mvwprintw(ctx->win_description,0,1,"Informations");
@@ -71,14 +117,43 @@ void gui_draw_window_notification(struct ctx *ctx, const char* notification){
 }
 
 void gui_draw_search_bar(struct ctx *ctx){
-    werase(ctx->win_search_bar);
     box(ctx->win_search_bar,0,0);
     mvwprintw(ctx->win_search_bar,0,1,"search");
     wmove(ctx->win_search_bar, 1, 1);
     wrefresh(ctx->win_search_bar);
 }
 
+void gui_draw_downloads(struct ctx *ctx){
+    box(ctx->win_downloads,0,0);
+    mvwprintw(ctx->win_downloads,0,1,"Downloads");
+    wrefresh(ctx->win_downloads);
+}
 
+void gui_clear_windows(struct ctx *ctx){
+    if(ctx->current_windows_state == SEARCH){
+        werase(stdscr);
+        refresh();
+        werase(ctx->win_description);
+        wrefresh(ctx->win_description);
+        werase(ctx->win_downloads);
+        wrefresh(ctx->win_downloads);
+    }
+    if(ctx->current_windows_state == RESULTS){
+        werase(ctx->win_search_bar);
+        wrefresh(ctx->win_search_bar);
+        werase(ctx->win_downloads);
+        wrefresh(ctx->win_downloads);
+    }
+    if(ctx->current_windows_state == DOWNLOADS){
+        werase(ctx->win_search_bar);
+        wrefresh(ctx->win_search_bar);
+        werase(stdscr);
+        refresh();
+        werase(ctx->win_description);
+        wrefresh(ctx->win_description);
+
+    }
+}
 
 
 

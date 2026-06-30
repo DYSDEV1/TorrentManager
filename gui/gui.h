@@ -15,7 +15,8 @@
 
 enum win_state{
     SEARCH,
-    LIST_TORRENTS
+    RESULTS,
+    DOWNLOADS
 };
 
 
@@ -25,6 +26,8 @@ struct ctx{
     WINDOW *win_search_bar;
     WINDOW *win_description;
     WINDOW *win_notification;
+    WINDOW *win_tabs;
+    WINDOW *win_downloads;
     enum win_state current_windows_state;
     ITEM **items;
     MENU *menu;
@@ -37,13 +40,19 @@ void gui_menu_cleanup(struct ctx *ctx);
 int gui_create_window_search_bar(struct ctx *ctx);
 int gui_create_window_description(struct ctx *ctx);
 int gui_create_window_notification(struct ctx *ctx);
+int gui_create_window_tabs(struct ctx *ctx);
+int gui_create_window_downloads(struct ctx *ctx);
+
 
 
 void gui_draw_windows(struct ctx *ctx);
 void gui_draw_search_bar(struct ctx *ctx);
 void gui_draw_window_description(struct ctx *ctx);
 void gui_draw_window_notification(struct ctx *ctx, const char* notification);
+void gui_draw_window_tabs(struct ctx *ctx);
+void gui_draw_downloads(struct ctx *ctx);
 
+void gui_clear_windows(struct ctx *ctx);
 
 int gui_use_search_bar(struct ctx *ctx);
 

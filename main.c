@@ -62,46 +62,69 @@ int main(){
     if(gui_create_window_description(&ctx) != 0){
         goto cleanup;
     }
+    /*
     if(gui_create_window_notification(&ctx) != 0 ){
+        goto cleanup;
+    }*/
+   if(gui_create_window_downloads(&ctx) != 0){
+        goto cleanup;
+   }
+    if(gui_create_window_tabs(&ctx) != 0){
         goto cleanup;
     }
 
+    ctx.current_windows_state = SEARCH;
     while(!exit){
         if(ctx.current_windows_state == SEARCH){
             gui_menu_cleanup(&ctx);
-            refresh();
-            gui_draw_search_bar(&ctx);  
+            gui_clear_windows(&ctx);
+            gui_draw_window_tabs(&ctx); 
+            gui_draw_search_bar(&ctx); 
             torrents_cleanup(torrents_list);
             torrents_list = NULL;
             wgetnstr(ctx.win_search_bar,user_search_input,MAX_INPUT_SIZE);
             torrents_list = search(curl_handle_rutracker,user_search_input, log_file);
             if(!torrents_list){
-                ctx.current_windows_state = SEARCH;
                 continue;
             }
-            ctx.current_windows_state = LIST_TORRENTS;
+            ctx.current_windows_state = RESULTS;
+            gui_clear_windows(&ctx);
+            gui_draw_window_tabs(&ctx);
+            gui_draw_window_description(&ctx);
             if(gui_create_menu(torrents_list,&ctx) != 0){
                 fprintf(log_file, "[!] Failed to create menu\n");
                 goto cleanup;
             }
-            werase(ctx.win_search_bar);
-            wrefresh(ctx.win_search_bar);
+            if(!ctx.menu){
+                fprintf(log_file,"[!] Ctx menu not posted\n");
+                goto cleanup;
+            }
         }
-        gui_draw_window_description(&ctx);
-        if(!ctx.menu){
-            fprintf(log_file,"[!] Ctx menu not posted\n");
-            goto cleanup;
+        if(ctx.current_windows_state == RESULTS){
+            gui_clear_windows(&ctx);
+            gui_draw_window_tabs(&ctx);
+            gui_draw_window_description(&ctx);
+        }
+        if(ctx.current_windows_state == DOWNLOADS){
+            gui_clear_windows(&ctx);
+            gui_draw_downloads(&ctx);
+            gui_draw_window_tabs(&ctx);
         }
         ch  = getch();
         switch(ch){
             case '\x1b':
                 exit = true;
                 break;
-            case '\t':
-                ctx.current_windows_state = SEARCH;
-                break;
             case KEY_DOWN:
                 menu_driver(ctx.menu,REQ_DOWN_ITEM);
+                break;
+            case KEY_LEFT:
+                if(ctx.current_windows_state != 0)
+                    ctx.current_windows_state --;
+                break;
+            case KEY_RIGHT:
+                if(ctx.current_windows_state != 2)
+                    ctx.current_windows_state ++;
                 break;
             case KEY_UP:
                 menu_driver(ctx.menu,REQ_UP_ITEM);
@@ -118,7 +141,16 @@ int main(){
                     fprintf(log_file,"[!] Failed to get item ptr\n");
                     ctx.current_windows_state = SEARCH;
                     break;
-                }            
+                }   
+                ctx.current_windows_state = DOWNLOADS;
+                /* Handle windows */
+                werase(ctx.win_description);
+                werase(stdscr);
+                wrefresh(ctx.win_description);
+                refresh();
+                gui_draw_downloads(&ctx);
+                gui_draw_window_tabs(&ctx); 
+                sleep(5);
                 if(download(curl_handle_rutracker,torrent->id,log_file) != 0){
                     fprintf(log_file,"[!] Failed to download torrent\n");
                     gui_draw_window_notification(&ctx,"[!] Failed to download torrent\n");
@@ -149,7 +181,7 @@ int main(){
                     ctx.current_windows_state = SEARCH;
                     break;
                 }
-                ctx.current_windows_state = SEARCH;
+                ctx.current_windows_state = DOWNLOADS;
                 break;
             default:
         }
@@ -161,6 +193,7 @@ int main(){
         }
         wclear(ctx.win_description);
         mvwprintw(ctx.win_description, 1, 1, " Description: %s \n seeders:%s\n size:%s",torrent->information, torrent->seeders,torrent->size);
+        wrefresh(ctx.win_description);
  
     }
 
