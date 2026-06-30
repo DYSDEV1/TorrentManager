@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 #include "types.h"
 #include "utils.h"
+#include "../gui/gui.h"
 
 
 #define BASE_URL "https://rutracker.org"
@@ -34,6 +35,8 @@
 #define MAX_RESPONSE_SIZE (50 * 1024 * 1024) 
 #define FILENAME_SIZE 1
 
+#define POSTFIELDS_SEARCH "f%%5B%%5D=-1&o=7&s=2&pn=&nm=%s"
+
 
 int authenticate(CURL *curl_handle,const char* fmt,const char* user, const char* password, FILE *log_file, const char* cookie_file_name, const char* endpoint_url, enum cookie_type ct);
 
@@ -46,11 +49,11 @@ int download(CURL *curl_handle,const char* torrent_name, FILE *log_file);
 
 int uploadToServer(CURL *curl_handle,char* torrent_name, FILE *log_file);
 
-int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file);
+int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file, struct ctx *ctx);
 
 int retrieveTorrentInfo(CURL *curl_handle,char* torrent_id,char* torrent_name,char* hash,char* torrent_path,FILE *log_file);
 
-int downloadFromServer(char* torrent_path,char *download_path,FILE *log_file);
+int downloadFromServer(char* torrent_path,char *download_path,FILE *log_file, struct ctx *ctx);
 
 
 #endif

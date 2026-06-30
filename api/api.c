@@ -226,6 +226,7 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
     CURLcode code_return_curl;
     int code_function_return = 0;
     char* url_search = NULL;
+    char* postfields = NULL;
     char* encoded_search_string = NULL;
 
     if(!isLogged(curl_handle,COOKIE_RUTRACKER)){
@@ -259,6 +260,20 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
     }
     snprintf(url_search,(size_t)(nb_required_bytes+1),ENDPOINT_SEARCH,encoded_search_string);
 
+    nb_required_bytes = snprintf(NULL,0,POSTFIELDS_SEARCH,encoded_search_string);
+    if(nb_required_bytes < 0){
+        fprintf(log_file,"[!] Failed to alloc postfield\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
+    postfields = malloc((size_t)nb_required_bytes + 1);
+    if(!postfields){
+        fprintf(log_file,"[!] Failed to alloc postfields buffer\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
+    snprintf(postfields,(size_t)(nb_required_bytes+1),POSTFIELDS_SEARCH,encoded_search_string);
+
     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,url_search)) != CURLE_OK){
         fprintf(log_file,"[!] Failed to set url.\n");
         code_function_return = -1;
@@ -275,6 +290,11 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
         code_function_return = -1;
         goto cleanup;
     }
+      if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_POSTFIELDS,postfields)) != CURLE_OK){
+        fprintf(log_file,"[!] Failed to set postfields\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
 
     code_return_curl = curl_easy_perform(curl_handle);
 
@@ -286,6 +306,8 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
     struct torrent *torrents_list = parse(&curl_res);
 
     cleanup:
+        curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, NULL);
+        curl_easy_setopt(curl_handle, CURLOPT_POST, 0L);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, NULL);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL);
         if(curl_res.html)
@@ -294,6 +316,8 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
             free(url_search);
         if(encoded_search_string)
             curl_free(encoded_search_string);
+        if(postfields)
+            free(postfields);
        
     fflush(log_file);
     if(code_function_return == -1){
@@ -467,11 +491,16 @@ int uploadToServer(CURL *curl_handle,char* torrent_name, FILE *log_file){
         fprintf(log_file,"[!] Failed to upload torrent\n");
         code_function_return = -1;
         goto cleanup;
-    }else{
-
     }
 
-      cleanup:
+    if(remove(torrent_name) != 0){
+        fprintf(log_file,"[!] Failed to delete torrent file\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
+
+
+    cleanup:
         curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, NULL);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL);
         curl_easy_setopt(curl_handle, CURLOPT_MIMEPOST, NULL);
@@ -593,17 +622,18 @@ int retrieveTorrentInfo(CURL *curl_handle,char* torrent_id,char* torrent_name,ch
     return code_function_return;
 }
 
-int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file){
+int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file, struct ctx *ctx){
     struct curl_response curl_res = {0};
     CURLcode code_return_curl;
     int code_function_return = 0;
     char* url = NULL;
     char* progress_ptr = NULL;
-    int progress = 0;
+    float progress = 0;
     curl_easy_setopt(curl_handle, CURLOPT_MIMEPOST, NULL);
     curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, NULL);
     curl_easy_setopt(curl_handle, CURLOPT_POST, 0L);
     curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1L);
+    char progress_str[30];
 
     if(!isLogged(curl_handle,COOKIE_QBITTORRENT)){
         if(authenticate(curl_handle,FMT_QBITTORRENT,getenv("username_qbittorrent"),getenv("password_qbittorrent"),log_file, COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT, COOKIE_QBITTORRENT) != 0){
@@ -652,6 +682,7 @@ int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file){
             code_function_return = -1;
             goto cleanup;
         }
+        
         if((progress_ptr = strstr(curl_res.html,HTML_INDICATOR_PROGRESS)) == NULL){
             fprintf(log_file,"[!] Failed to retrieve progress information\n");
             code_function_return = -1;
@@ -663,14 +694,19 @@ int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file){
             code_function_return = -1;
             goto cleanup;
         }
+        snprintf(progress_str,30,"Uploading : %d%%",(int)(progress*100));
+        gui_draw_window_notification(ctx, progress_str);
         if(curl_res.html){
             free(curl_res.html);
             curl_res.html = NULL;
             curl_res.size = 0;
         }
+        memset(progress_str,0,5);
         sleep(2);
 
     }
+    werase(ctx->win_notification);
+    wrefresh(ctx->win_notification);
     cleanup:
         curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, NULL);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL);
@@ -684,10 +720,15 @@ int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file){
 }
 
 
-int downloadFromServer(char* torrent_path,char* download_path,FILE *log_file){
+int downloadFromServer(char* torrent_path,char* download_path,FILE *log_file, struct ctx *ctx){
     char* full_rsync_path = NULL;
     int code_function_return = 0;
+    int pipefd[2];
     pid_t pid_rsync;
+    char read_buffer;
+    char rsync_output_buffer[1024];
+    char* ptr_rsync_buffer = rsync_output_buffer;
+    int count = 0;
 
     if((!torrent_path) || (!download_path)){
         code_function_return = -1;
@@ -710,21 +751,61 @@ int downloadFromServer(char* torrent_path,char* download_path,FILE *log_file){
     }
     snprintf(full_rsync_path,((size_t)nb_required_bytes+1),"%s:%s",ENDPOINT_RSYNC,torrent_path);
     
+    if(pipe(pipefd) == -1){
+        fprintf(log_file,"[!] Failed to create pipe\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
+
     pid_rsync = fork();
+
     if(pid_rsync < 0){
         fprintf(log_file, "[!] Failed to fork\n");
         code_function_return = -1;
         goto cleanup;
     }
+    //child
     if(pid_rsync == 0){
-
-        if(execlp("rsync","rsync","-a",full_rsync_path,download_path, NULL) == -1){
-            fprintf(log_file,"Failed to retrieve the movie\n");
-            exit(EXIT_FAILURE);
+        if(close(pipefd[0]) == -1){
+            fprintf(log_file,"[!] Failed to close unused pipe\n");
+            _exit(EXIT_FAILURE);
         }
-        exit(EXIT_SUCCESS);
+        if(dup2(pipefd[1],1) == -1){
+            fprintf(log_file,"[!] Failed to dup pipe\n");
+            _exit(EXIT_FAILURE);
+        }
+        close(pipefd[1]);
+        if(execlp("rsync","rsync","-a","--info=progress2","--info=name0","--",full_rsync_path,download_path, NULL) == -1){
+            fprintf(log_file,"[!] Failed to retrieve the movie\n");
+            _exit(EXIT_FAILURE);
+        }
+        _exit(EXIT_SUCCESS);
     }
-    wait(&code_function_return);
+    //parent
+    if(close(pipefd[1]) == -1){
+        fprintf(log_file,"[!] Failed to close write pipe\n");
+        code_function_return = -1;
+        goto cleanup;
+    }
+    while(read(pipefd[0],&read_buffer,1) > 0){
+        if((read_buffer == '\r') || (read_buffer == '\n') || (count >= 1023)){
+            *ptr_rsync_buffer = '\0';
+            gui_draw_window_notification(ctx,rsync_output_buffer);
+            memset(rsync_output_buffer,0,1024);
+            ptr_rsync_buffer = rsync_output_buffer;
+            count = 0;
+        }else{
+            count++;
+            *ptr_rsync_buffer = read_buffer;
+            ptr_rsync_buffer++;
+        }
+    }
+    close(pipefd[0]);
+    if(count >0){
+        *ptr_rsync_buffer = '\0';
+        gui_draw_window_notification(ctx,rsync_output_buffer);
+    }
+    waitpid(pid_rsync,&code_function_return,0);
     
     cleanup:
         if(full_rsync_path)

@@ -19,8 +19,7 @@ struct torrent* parse(struct curl_response *curl_res){
     char* cp_html3 = curl_res->html;
     char* clean_string = NULL;
     struct torrent *head = NULL;
-    int count = 0;
-    
+    struct torrent *tail = NULL;
     char* line = curl_res->html;
     char* line2 = curl_res->html;
     char* line3 = curl_res->html;
@@ -29,9 +28,6 @@ struct torrent* parse(struct curl_response *curl_res){
     while((line = strstr(cp_html,HTML_INDICATOR_DESC)) != NULL){
         memset(size,0,SIZE_ARRAY);
         memset(unit_size,0,SIZE_UNIT_ARRAY);
-        if(count >= 20){
-            break;
-        }
         struct torrent *curr = calloc(1,sizeof(struct torrent));
         if(!curr){
             continue;
@@ -78,8 +74,13 @@ struct torrent* parse(struct curl_response *curl_res){
             free(curr->information);
             curr->information = clean_string;
         }
-        curr->next = head;
-        head = curr;
+        if(!head){
+            head = curr;
+            tail = curr;
+        }else{
+            tail->next = curr;
+            tail = curr;
+        }
         cp_html = line;
         if(!line2){
             cp_html2 = line;
@@ -94,7 +95,6 @@ struct torrent* parse(struct curl_response *curl_res){
         cp_html2 += strlen(HTML_INDICATOR_SEEDERS);
         cp_html += strlen(HTML_INDICATOR_DESC);
         cp_html3 += strlen(HTML_INDICATOR_SIZE);
-        count ++;
    
     }
 
