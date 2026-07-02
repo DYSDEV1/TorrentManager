@@ -27,10 +27,10 @@
 #define SIZE_ARRAY 32
 #define SIZE_UNIT_ARRAY 8
 
+
 struct torrent* parse(struct curl_response *curl_res);
 
 void torrents_cleanup(struct torrent *torrents_list);
-
-
 char* remove_non_utf8_char(char* str);
+
 #endif

@@ -14,6 +14,8 @@ int main(){
     char user_search_input[MAX_INPUT_SIZE];
     bool exit = false;
     struct torrent *torrents_list = NULL;
+    struct thread_torrent *active_downloads[MAX_THREAD];
+    int count_torrent_currently_downloading = 0;
 
     log_file = fopen("logs.txt","w");
     if(log_file == NULL){
@@ -75,6 +77,32 @@ int main(){
 
     ctx.current_windows_state = SEARCH;
     while(!exit){
+        char cp_upload_progress[40];
+        char cp_download_progress[128];
+        enum thread_status curr_status;
+        for(int i=0;i<MAX_THREAD;i++){
+            pthread_mutex_lock(&active_downloads[i]->mutex);
+            curr_status = active_downloads[i]->status;
+            pthread_mutex_unlock(&active_downloads[i]->mutex);
+            if(curr_status == UPLOADING){
+                pthread_mutex_lock(&active_downloads[i]->mutex);
+                snprintf(cp_upload_progress,sizeof(cp_upload_progress),"%s",active_downloads[i]->upload_progress);
+                pthread_mutex_unlock(&active_downloads[i]->mutex);
+            }
+            if(curr_status == DOWNLOADING){
+                pthread_mutex_lock(&active_downloads[i]->mutex);
+                snprintf(cp_download_progress,sizeof(cp_download_progress),"%s",active_downloads[i]->download_progress);
+                pthread_mutex_unlock(&active_downloads[i]->mutex);
+            }
+            if(curr_status == FINISHED || curr_status == FAILED){
+                pthread_join(active_downloads[i]->thread,NULL);
+                pthread_mutex_destroy(&active_downloads[i]->mutex);
+                curl_easy_cleanup(active_downloads[i]->curl_handle);
+                free(active_downloads[i]);
+                count_torrent_currently_downloading --;
+            }
+
+        }
         if(ctx.current_windows_state == SEARCH){
             gui_menu_cleanup(&ctx);
             gui_clear_windows(&ctx);
@@ -142,46 +170,71 @@ int main(){
                     ctx.current_windows_state = SEARCH;
                     break;
                 }   
+                torrent->curl_handle = curl_easy_init();
+                if(!torrent->curl_handle){
+                    fprintf(log_file, "[!] Failed to create handle for the torrent\n");
+                    gui_draw_window_notification(&ctx,"[!] Failed to create handle for the torrent\n");
+                    ctx.current_windows_state = SEARCH;
+                    break;
+                }
                 ctx.current_windows_state = DOWNLOADS;
                 /* Handle windows */
-                werase(ctx.win_description);
-                werase(stdscr);
-                wrefresh(ctx.win_description);
-                refresh();
+                gui_clear_windows(&ctx);
                 gui_draw_downloads(&ctx);
                 gui_draw_window_tabs(&ctx); 
-                sleep(5);
                 if(download(curl_handle_rutracker,torrent->id,log_file) != 0){
                     fprintf(log_file,"[!] Failed to download torrent\n");
                     gui_draw_window_notification(&ctx,"[!] Failed to download torrent\n");
                     ctx.current_windows_state = SEARCH;
                     break;
                 }
-                if(uploadToServer(curl_handle_qbitorrent,torrent->id,log_file) != 0){
+                if(uploadToServer(torrent,log_file) != 0){
                     fprintf(log_file,"[!] Failed to upload to qbittorrent\n");
                     gui_draw_window_notification(&ctx,"[!] Failed to upload to qbittorrent\n");
                     ctx.current_windows_state = SEARCH;
                     break;
                 }
-                if(retrieveTorrentInfo(curl_handle_qbitorrent,torrent->id,torrent->name,torrent->hash,torrent->full_path,log_file) != 0){
+                if(retrieveTorrentInfo(torrent,log_file) != 0){
                     fprintf(log_file,"[!] Failed to retrieve hash\n");
                     gui_draw_window_notification(&ctx,"[!] Failed to retrieve hash\n");
                     ctx.current_windows_state = SEARCH;
                     break;
                 }
-                if(retrieveUploadProgression(curl_handle_qbitorrent,torrent->hash,log_file, &ctx) != 0){
-                    fprintf(log_file,"[!] Failed to retrieve torrent upload progression\n");
-                    gui_draw_window_notification(&ctx,"[!] Failed to retrieve torrent upload progression\n");
+
+                if(count_torrent_currently_downloading >= MAX_THREAD){
+                    fprintf(log_file,"[!] Max 5 downloads at a time, please wait\n");
                     ctx.current_windows_state = SEARCH;
                     break;
                 }
-                if(downloadFromServer(torrent->full_path,getenv("download_path"),log_file, &ctx) != 0){
-                    fprintf(log_file,"[!] Failed to download final content\n");
-                    gui_draw_window_notification(&ctx,"[!] Failed to download final content\n");
-                    ctx.current_windows_state = SEARCH;
+
+                /* Handle heavy task in threads*/
+            
+                struct thread_torrent *tt = malloc(sizeof(struct thread_torrent));
+                if(torrent){
+                    tt->id = strdup(torrent->id);
+                    memcpy(tt->name,torrent->name,sizeof(torrent->name));
+                    memcpy(tt->hash,torrent->hash,sizeof(torrent->hash));
+                    memcpy(tt->full_path,torrent->full_path,sizeof(torrent->full_path));
+                    memcpy(tt->upload_progress,torrent->upload_progress,sizeof(torrent->upload_progress));
+                    memcpy(tt->download_progress,torrent->download_progress, sizeof(torrent->download_progress));
+                }
+                tt->curl_handle = curl_easy_init();
+                pthread_mutex_init(&tt->mutex,NULL);
+                tt->thread = pthread_self();
+                
+                active_downloads[count_torrent_currently_downloading++] = tt;
+                
+                /* Authenticate the curl_handle thread*/
+                if(authenticate(tt->curl_handle,FMT_QBITTORRENT,getenv("username_qbittorrent"),getenv("password_qbittorrent"),log_file,COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT, COOKIE_QBITTORRENT) != 0){
+                    fprintf(log_file,"[!] Failed to authenticate to qbitorrent\n");
+                    goto cleanup;
+                }
+                
+                if(pthread_create(&tt->thread,NULL,handle_threaded_torrent_download,(void*) tt) != 0){
+                    fprintf(log_file,"[!] Failed to create thread \n");
+                    gui_draw_window_notification(&ctx,"[!] Failed to create thread\n");
                     break;
                 }
-                ctx.current_windows_state = DOWNLOADS;
                 break;
             default:
         }

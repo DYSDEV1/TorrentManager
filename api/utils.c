@@ -4,6 +4,7 @@
 
 void free_torrent(struct torrent *torrent){
     if(!torrent) return;
+    curl_easy_cleanup(torrent->curl_handle);
     free(torrent->id);
     free(torrent->information);
     free(torrent->seeders);
@@ -127,4 +128,5 @@ char* remove_non_utf8_char(char* str){
     clean_str[pos] = '\0';
     return clean_str;
 }
+
 

@@ -47,13 +47,18 @@ bool isLogged(CURL *curl_handle, enum cookie_type);
 
 int download(CURL *curl_handle,const char* torrent_name, FILE *log_file);
 
-int uploadToServer(CURL *curl_handle,char* torrent_name, FILE *log_file);
+int uploadToServer(struct torrent *tr,FILE *log_file);
 
-int retrieveUploadProgression(CURL *curl_handle,char* hash, FILE *log_file, struct ctx *ctx);
+int retrieveTorrentInfo(struct torrent *tr,FILE *log_file);
 
-int retrieveTorrentInfo(CURL *curl_handle,char* torrent_id,char* torrent_name,char* hash,char* torrent_path,FILE *log_file);
 
-int downloadFromServer(char* torrent_path,char *download_path,FILE *log_file, struct ctx *ctx);
+/* thread functions */
+
+int retrieveUploadProgression(struct thread_torrent *tt);
+
+int downloadFromServer(struct thread_torrent *tt);
+
+void* handle_threaded_torrent_download(void* arg);
 
 
 #endif
