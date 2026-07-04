@@ -2,8 +2,10 @@
 #include "api/env.h"
 #include "api/types.h"
 #include "gui/gui.h"
+#include <curl/curl.h>
 #include <ncurses.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 #define MAX_INPUT_SIZE 256
 
@@ -185,9 +187,15 @@ int main(){
                         ctx.current_windows_state = SEARCH;
                         ctx.tab_changed = true;
                         break;
-                    }   
+                    } 
+                    if(download(curl_handle_rutracker,curr_torrent->id,log_file) != 0){
+                        fprintf(log_file,"[!] Failed to download torrent\n");
+                        ctx.current_windows_state = SEARCH;
+                        break;
+                    } 
                     /* Create a thread for the new download */
                     thread_torrent = malloc(sizeof(struct thread_torrent));
+                    info_dt[count_torrent_currently_downloading] = calloc(1, sizeof(struct info_download_torrents));
                     if(curr_torrent){
                         thread_torrent->id = strdup(curr_torrent->id);
                     }

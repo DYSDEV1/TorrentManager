@@ -11,7 +11,7 @@
 #define SB_HEIGHT 3
 #define SB_WIDTH  40 
 #define SB_Y 4
-#define MAX_MENU_SIZE 8
+#define MAX_MENU_SIZE 6
 
 
 enum win_state{

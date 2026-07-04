@@ -329,51 +329,67 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
     }
 
 }
-
-int download(struct thread_torrent *tt){
+int download(CURL *curl_handle,const char *torrent_name, FILE *log_file){
     struct curl_response curl_res = {0};
+    CURLcode code_return_curl;
     int code_function_return = 0;
     char* url_download = NULL;
     FILE *torrent_file = NULL;
 
-    if(!isLogged(tt->curl_handle,COOKIE_RUTRACKER)){
-        code_function_return = -1;
-        goto cleanup;
+    if(!isLogged(curl_handle,COOKIE_RUTRACKER)){
+        if(authenticate(curl_handle,FMT_RUTRACKER,getenv("username_rutracker"),getenv("password_rutracker"),log_file, COOKIE_FILENAME_RUTRACKER, ENDPOINT_LOGIN_RUTRACKER, COOKIE_RUTRACKER) != 0){
+            fprintf(log_file,"[!] Failed to authenticate");
+            code_function_return = -1;
+            goto cleanup;
+        }  
     }
 
-    int nb_required_bytes = snprintf(NULL,0,ENDPOINT_DOWNLOAD,tt->id);
+    int nb_required_bytes = snprintf(NULL,0,ENDPOINT_DOWNLOAD,torrent_name);
 
     if(nb_required_bytes < 0){
+        fprintf(log_file,"[!] Failed to alloc url.\n");
         code_function_return = -1;
         goto cleanup;
     }
     url_download = malloc((size_t)(nb_required_bytes + 1));
 
     if(!url_download){
+        fprintf(log_file,"[!] Failed to alloc url.\n");
         code_function_return = -1;
         goto cleanup;
     }
 
-    snprintf(url_download,(size_t)(nb_required_bytes+1),ENDPOINT_DOWNLOAD,tt->id);
+    snprintf(url_download,(size_t)(nb_required_bytes+1),ENDPOINT_DOWNLOAD,torrent_name);
 
-    if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_URL,url_download)) != CURLE_OK){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,url_download)) != CURLE_OK){
+        fprintf(log_file,"[!] Failed to set url.\n");
+        code_function_return = -1;
         goto cleanup;
     }
-    if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_WRITEFUNCTION, &handleDownloadTorrent)) != CURLE_OK){
+    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleDownloadTorrent)) != CURLE_OK){
+        fprintf(log_file,"[!] Failed to set writefunction.\n");
+        code_function_return = -1;
         goto cleanup;
     }
 
-    torrent_file = fopen(tt->id,"wb");
+    torrent_file = fopen(torrent_name,"wb");
     if(!torrent_file){
+        fprintf(log_file, "[!] Failed to create torrent file\n");
         code_function_return = -1;
         goto cleanup;
     }
 
-     if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_WRITEDATA,(void*)torrent_file)) != CURLE_OK){
+     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)torrent_file)) != CURLE_OK){
+        fprintf(log_file,"[!] Failed to set result structure\n");
+        code_function_return = -1;
         goto cleanup;
     }
 
-    if((code_function_return = curl_easy_perform(tt->curl_handle)) != CURLE_OK){
+    code_return_curl = curl_easy_perform(curl_handle);
+
+    if(code_return_curl != CURLE_OK){
+        fprintf(log_file,"[!] Failed to execute request\n");
+        code_function_return = -1;
         goto cleanup;
     }
 
@@ -385,9 +401,11 @@ int download(struct thread_torrent *tt){
         if(url_download)
             free(url_download);
     
+    fflush(log_file);
     return code_function_return;
 
 }
+
 
 int uploadToServer(struct thread_torrent *tt){
     struct curl_response curl_res = {0};
@@ -413,7 +431,7 @@ int uploadToServer(struct thread_torrent *tt){
         code_function_return = -1;
         goto cleanup;
     }
-    if((code_function_return = curl_mime_filedata(part,tt->name)) != CURLE_OK)
+    if((code_function_return = curl_mime_filedata(part,tt->id)) != CURLE_OK)
     {
         goto cleanup;
     }
@@ -428,7 +446,7 @@ int uploadToServer(struct thread_torrent *tt){
     if((code_function_return = curl_mime_name(part,"tags")) != CURLE_OK){
         goto cleanup;
     }
-    if((code_function_return = curl_mime_data(part,tt->name,strlen(tt->name))) != CURLE_OK){
+    if((code_function_return = curl_mime_data(part,tt->id,strlen(tt->id))) != CURLE_OK){
         goto cleanup;
     }
 
@@ -449,11 +467,11 @@ int uploadToServer(struct thread_torrent *tt){
         code_function_return = -1;
         goto cleanup;
     }
-
+    /*
     if(remove(tt->name) != 0){
         code_function_return = -1;
         goto cleanup;
-    }
+    }*/
 
     cleanup:
         curl_easy_setopt(tt->curl_handle, CURLOPT_WRITEDATA, NULL);
@@ -619,7 +637,7 @@ int retrieveUploadProgression(struct thread_torrent *tt){
         }
         pthread_mutex_lock(&tt->mutex);
         memset(tt->upload_progress,0,UPLOAD_PROGRESS_BUFFER_SIZE);
-        snprintf(tt->upload_progress,UPLOAD_PROGRESS_BUFFER_SIZE,"Uploading : %d%%",(int)(progress*100));
+        snprintf(tt->upload_progress,UPLOAD_PROGRESS_BUFFER_SIZE,"Downloading : %d%%",(int)(progress*100));
         pthread_mutex_unlock(&tt->mutex);
         if(curl_res.html){
             free(curl_res.html);
@@ -647,7 +665,7 @@ int downloadFromServer(struct thread_torrent *tt){
     int pipefd[2];
     pid_t pid_rsync;
     char read_buffer;
-    char tmp_buffer[128];
+    char tmp_buffer[DOWNLOAD_PROGRESS_BUFFER_SIZE];
     char* ptr_rsync_buffer = tmp_buffer;
     const char* download_path = getenv("download_path");
     int count = 0;
@@ -705,10 +723,10 @@ int downloadFromServer(struct thread_torrent *tt){
         if((read_buffer == '\r') || (read_buffer == '\n') || (count >= (DOWNLOAD_PROGRESS_BUFFER_SIZE-1))){
             *ptr_rsync_buffer = '\0';
             pthread_mutex_lock(&tt->mutex);
-            memset(tt->download_progress,0,UPLOAD_PROGRESS_BUFFER_SIZE);
-            memcpy(tt->download_progress,ptr_rsync_buffer,UPLOAD_PROGRESS_BUFFER_SIZE);
-            pthread_mutex_unlock(&tt->mutex);
             memset(tt->download_progress,0,DOWNLOAD_PROGRESS_BUFFER_SIZE);
+            memcpy(tt->download_progress,tmp_buffer,(count+1));
+            pthread_mutex_unlock(&tt->mutex);
+            ptr_rsync_buffer = tmp_buffer;
             count = 0;
         }else{
             count++;
@@ -720,8 +738,8 @@ int downloadFromServer(struct thread_torrent *tt){
     if(count > 0){
         *ptr_rsync_buffer = '\0';
         pthread_mutex_lock(&tt->mutex);
-        memset(tt->download_progress,0,UPLOAD_PROGRESS_BUFFER_SIZE);
-        memcpy(tt->download_progress,ptr_rsync_buffer,UPLOAD_PROGRESS_BUFFER_SIZE);
+        memset(tt->download_progress,0,DOWNLOAD_PROGRESS_BUFFER_SIZE);
+        memcpy(tt->download_progress,tmp_buffer,(count + 1));
         pthread_mutex_unlock(&tt->mutex);
     }
     waitpid(pid_rsync,&code_function_return,0);
@@ -741,12 +759,6 @@ void* handle_threaded_torrent_download(void* arg){
     pthread_mutex_lock(&tt->mutex);
         tt->status = UPLOADING_OR_DOWNLOADING;
     pthread_mutex_unlock(&tt->mutex);
-    if(download(tt) != 0){
-        pthread_mutex_lock(&tt->mutex);
-        tt->status = FAILED;
-        pthread_mutex_unlock(&tt->mutex);
-        return NULL;
-    }
     if(uploadToServer(tt)){
         pthread_mutex_lock(&tt->mutex);
         tt->status = FAILED;

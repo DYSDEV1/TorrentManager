@@ -25,6 +25,9 @@ int gui_init(struct ctx *ctx){
     if(gui_create_window_tabs(ctx) != 0){
         return -1;
     }
+    if(gui_create_window_menu(ctx) != 0){
+        return -1;
+    }
     return 0;
     
 }
@@ -253,16 +256,15 @@ void gui_render(struct ctx *ctx, struct torrent *curr_torrent, char *user_input,
         werase(ctx->win_search_bar);
         werase(ctx->win_description);
         werase(ctx->win_downloads);
-        //werase(ctx->win_menu);
+        werase(ctx->win_menu);
 
         wnoutrefresh(ctx->win_search_bar);
         wnoutrefresh(ctx->win_description);
         wnoutrefresh(ctx->win_downloads);
-        //wnoutrefresh(ctx->win_menu);
+        wnoutrefresh(ctx->win_menu);
         if(ctx->current_windows_state == SEARCH){
             box(ctx->win_search_bar,0,0);
             mvwprintw(ctx->win_search_bar,0,1,"search");
-            mvwprintw(ctx->win_search_bar, 1, 1, "%s", user_input);
             wmove(ctx->win_search_bar, 1, 1);
             wnoutrefresh(ctx->win_search_bar);
         }
@@ -305,6 +307,12 @@ void gui_render(struct ctx *ctx, struct torrent *curr_torrent, char *user_input,
         }
         wnoutrefresh(ctx->win_tabs);
         ctx->tab_changed = false;
+    }
+    if(ctx->dirty_menu){
+        box(ctx->win_menu,0,0);
+        mvwprintw(ctx->win_menu, 0, 1, "Results");
+        wnoutrefresh(ctx->win_menu);
+        ctx->dirty_menu = false;
     }
     if(ctx->dirty_search){
         werase(ctx->win_search_bar);

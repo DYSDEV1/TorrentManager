@@ -43,8 +43,7 @@ struct torrent* search(CURL *curl_handle,const char* search_string, FILE *log_fi
 
 bool isLogged(CURL *curl_handle, enum cookie_type);
 
-
-int download(struct thread_torrent *tt);
+int download(CURL *curl_handle,const char *torrent_name, FILE *log_file);
 
 int uploadToServer(struct thread_torrent *tt);
 
@@ -55,7 +54,6 @@ int retrieveTorrentInfo(struct thread_torrent *tt);
 
 int retrieveUploadProgression(struct thread_torrent *tt);
 
-int downloadFromServer(struct thread_torrent *tt);
 
 void* handle_threaded_torrent_download(void* arg);
 
