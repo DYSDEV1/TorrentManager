@@ -1,27 +1,33 @@
 #include "api/api.h"
 #include "api/env.h"
+#include "api/types.h"
 #include "gui/gui.h"
+#include <ncurses.h>
 #include <pthread.h>
 
 #define MAX_INPUT_SIZE 256
-#define MAX_THREAD 5
 
 
 int main(){
     FILE *log_file;
     struct ctx ctx = {0};
     int ch;
-    char user_search_input[MAX_INPUT_SIZE];
     bool exit = false;
-    struct torrent *torrents_list = NULL;
-    struct thread_torrent *active_downloads[MAX_THREAD];
+
+    struct thread_torrent *active_downloads[MAX_THREAD] = {0};
+    struct info_download_torrents *info_dt[MAX_THREAD] = {0};
+    struct thread_torrent *thread_torrent = {0};
+    struct torrent *torrents_list = {0};
+    struct torrent *curr_torrent = {0};
+    
     int count_torrent_currently_downloading = 0;
+    char user_input[MAX_INPUT_SIZE];
+    int count_user_input;
 
     log_file = fopen("logs.txt","w");
     if(log_file == NULL){
         goto cleanup;
     }
-
     curl_global_init(CURL_GLOBAL_ALL);
     CURL *curl_handle_rutracker = curl_easy_init();
     if(!curl_handle_rutracker){
@@ -53,109 +59,79 @@ int main(){
         fprintf(log_file,"[!] Failed to authenticate to qbitorrent\n");
         goto cleanup;
     }
-
-
-    gui_init();
-    getmaxyx(stdscr,ctx.height_max,ctx.width_max);
-
-    if(gui_create_window_search_bar(&ctx) != 0){
-        goto cleanup;
-    }
-    if(gui_create_window_description(&ctx) != 0){
-        goto cleanup;
-    }
-    /*
-    if(gui_create_window_notification(&ctx) != 0 ){
-        goto cleanup;
-    }*/
-   if(gui_create_window_downloads(&ctx) != 0){
-        goto cleanup;
-   }
-    if(gui_create_window_tabs(&ctx) != 0){
-        goto cleanup;
-    }
-
+    gui_init(&ctx);
     ctx.current_windows_state = SEARCH;
+    ctx.tab_changed = true;
+    ctx.is_result = false;
+    count_user_input = 0;
     while(!exit){
-        char cp_upload_progress[40];
-        char cp_download_progress[128];
         enum thread_status curr_status;
-        for(int i=0;i<MAX_THREAD;i++){
+        /*Retrieve Torrent download update*/
+        for(int i=0;(i<count_torrent_currently_downloading) && (count_torrent_currently_downloading > 0);i++){
             pthread_mutex_lock(&active_downloads[i]->mutex);
             curr_status = active_downloads[i]->status;
             pthread_mutex_unlock(&active_downloads[i]->mutex);
-            if(curr_status == UPLOADING){
+            if(curr_status == UPLOADING_OR_DOWNLOADING){
                 pthread_mutex_lock(&active_downloads[i]->mutex);
-                snprintf(cp_upload_progress,sizeof(cp_upload_progress),"%s",active_downloads[i]->upload_progress);
+                snprintf(info_dt[i]->upload_progress,sizeof(info_dt[i]->upload_progress),"%s",active_downloads[i]->upload_progress);
+                snprintf(info_dt[i]->download_progress,sizeof(info_dt[i]->download_progress),"%s",active_downloads[i]->download_progress);
                 pthread_mutex_unlock(&active_downloads[i]->mutex);
             }
-            if(curr_status == DOWNLOADING){
-                pthread_mutex_lock(&active_downloads[i]->mutex);
-                snprintf(cp_download_progress,sizeof(cp_download_progress),"%s",active_downloads[i]->download_progress);
-                pthread_mutex_unlock(&active_downloads[i]->mutex);
-            }
-            if(curr_status == FINISHED || curr_status == FAILED){
+            if((curr_status == FINISHED) || (curr_status == FAILED)){
                 pthread_join(active_downloads[i]->thread,NULL);
                 pthread_mutex_destroy(&active_downloads[i]->mutex);
                 curl_easy_cleanup(active_downloads[i]->curl_handle);
+                free(active_downloads[i]->id);
                 free(active_downloads[i]);
-                count_torrent_currently_downloading --;
-            }
-
-        }
-        if(ctx.current_windows_state == SEARCH){
-            gui_menu_cleanup(&ctx);
-            gui_clear_windows(&ctx);
-            gui_draw_window_tabs(&ctx); 
-            gui_draw_search_bar(&ctx); 
-            torrents_cleanup(torrents_list);
-            torrents_list = NULL;
-            wgetnstr(ctx.win_search_bar,user_search_input,MAX_INPUT_SIZE);
-            torrents_list = search(curl_handle_rutracker,user_search_input, log_file);
-            if(!torrents_list){
-                continue;
-            }
-            ctx.current_windows_state = RESULTS;
-            gui_clear_windows(&ctx);
-            gui_draw_window_tabs(&ctx);
-            gui_draw_window_description(&ctx);
-            if(gui_create_menu(torrents_list,&ctx) != 0){
-                fprintf(log_file, "[!] Failed to create menu\n");
-                goto cleanup;
-            }
-            if(!ctx.menu){
-                fprintf(log_file,"[!] Ctx menu not posted\n");
-                goto cleanup;
+                if(count_torrent_currently_downloading == 1){
+                    active_downloads[i] = 0;
+                }else{
+                    active_downloads[i] = active_downloads[count_torrent_currently_downloading - 1];
+                    i--;
+                }
+                count_torrent_currently_downloading--;
             }
         }
-        if(ctx.current_windows_state == RESULTS){
-            gui_clear_windows(&ctx);
-            gui_draw_window_tabs(&ctx);
-            gui_draw_window_description(&ctx);
-        }
-        if(ctx.current_windows_state == DOWNLOADS){
-            gui_clear_windows(&ctx);
-            gui_draw_downloads(&ctx);
-            gui_draw_window_tabs(&ctx);
-        }
-        ch  = getch();
+        ch = getch();
         switch(ch){
             case '\x1b':
                 exit = true;
+                goto cleanup;
+            case KEY_UP:
+                if(ctx.current_windows_state == RESULTS){
+                    menu_driver(ctx.menu,REQ_UP_ITEM);
+                    curr_torrent = item_userptr(current_item(ctx.menu));
+                    if(!curr_torrent){
+                        fprintf(log_file,"[!] Failed to get item ptr\n");
+                        goto cleanup;
+                    }
+                    ctx.dirty_menu = true;
+                    ctx.dirty_description = true;
+                }
                 break;
             case KEY_DOWN:
-                menu_driver(ctx.menu,REQ_DOWN_ITEM);
+                if(ctx.current_windows_state == RESULTS){
+                    menu_driver(ctx.menu,REQ_DOWN_ITEM);
+                    curr_torrent = item_userptr(current_item(ctx.menu));
+                    if(!curr_torrent){
+                        fprintf(log_file,"[!] Failed to get item ptr\n");
+                        goto cleanup;
+                    }
+                    ctx.dirty_menu = true;
+                    ctx.dirty_description = true;
+                }
                 break;
             case KEY_LEFT:
-                if(ctx.current_windows_state != 0)
+                if(ctx.current_windows_state != 0){
+                    ctx.tab_changed = true;
                     ctx.current_windows_state --;
+                }
                 break;
             case KEY_RIGHT:
-                if(ctx.current_windows_state != 2)
+                if((ctx.current_windows_state < 2) && (ctx.is_result)){
+                    ctx.tab_changed = true;
                     ctx.current_windows_state ++;
-                break;
-            case KEY_UP:
-                menu_driver(ctx.menu,REQ_UP_ITEM);
+                }
                 break;
             case KEY_NPAGE:
 				menu_driver(ctx.menu, REQ_SCR_DPAGE);
@@ -163,90 +139,91 @@ int main(){
 			case KEY_PPAGE:
 				menu_driver(ctx.menu, REQ_SCR_UPAGE);
 				break;
-            case 10: 
-                struct torrent *torrent = item_userptr(current_item(ctx.menu));
-                if(!torrent){
-                    fprintf(log_file,"[!] Failed to get item ptr\n");
-                    ctx.current_windows_state = SEARCH;
-                    break;
-                }   
-                torrent->curl_handle = curl_easy_init();
-                if(!torrent->curl_handle){
-                    fprintf(log_file, "[!] Failed to create handle for the torrent\n");
-                    gui_draw_window_notification(&ctx,"[!] Failed to create handle for the torrent\n");
-                    ctx.current_windows_state = SEARCH;
-                    break;
+            case KEY_BACKSPACE:
+                if(ctx.current_windows_state == SEARCH){
+                    if(count_user_input > 0){
+                        user_input[--count_user_input] = '\0';
+                    }
+                    ctx.dirty_search = true;
                 }
-                ctx.current_windows_state = DOWNLOADS;
-                /* Handle windows */
-                gui_clear_windows(&ctx);
-                gui_draw_downloads(&ctx);
-                gui_draw_window_tabs(&ctx); 
-                if(download(curl_handle_rutracker,torrent->id,log_file) != 0){
-                    fprintf(log_file,"[!] Failed to download torrent\n");
-                    gui_draw_window_notification(&ctx,"[!] Failed to download torrent\n");
-                    ctx.current_windows_state = SEARCH;
-                    break;
+                break;
+            case 10:
+                if(ctx.current_windows_state == SEARCH){
+                    /* SEARCH  */
+                    user_input[count_user_input] = '\0';
+                    count_user_input = 0;
+                    torrents_cleanup(torrents_list);
+                    torrents_list = NULL;
+                    torrents_list = search(curl_handle_rutracker,user_input, log_file);
+                    if(!torrents_list){
+                        continue;
+                    }
+                    if(gui_create_menu(torrents_list,&ctx) != 0){
+                        fprintf(log_file, "[!] Failed to create menu\n");
+                        goto cleanup;
+                    }
+                    if(!ctx.menu){
+                        fprintf(log_file,"[!] Ctx menu not posted\n");
+                        goto cleanup;
+                    }
+                    ctx.is_result = true;
+                    ctx.tab_changed = true;
+                    ctx.current_windows_state = RESULTS;
+                    curr_torrent = item_userptr(current_item(ctx.menu));
+                    continue;
                 }
-                if(uploadToServer(torrent,log_file) != 0){
-                    fprintf(log_file,"[!] Failed to upload to qbittorrent\n");
-                    gui_draw_window_notification(&ctx,"[!] Failed to upload to qbittorrent\n");
-                    ctx.current_windows_state = SEARCH;
-                    break;
-                }
-                if(retrieveTorrentInfo(torrent,log_file) != 0){
-                    fprintf(log_file,"[!] Failed to retrieve hash\n");
-                    gui_draw_window_notification(&ctx,"[!] Failed to retrieve hash\n");
-                    ctx.current_windows_state = SEARCH;
-                    break;
-                }
-
-                if(count_torrent_currently_downloading >= MAX_THREAD){
-                    fprintf(log_file,"[!] Max 5 downloads at a time, please wait\n");
-                    ctx.current_windows_state = SEARCH;
-                    break;
-                }
-
-                /* Handle heavy task in threads*/
-            
-                struct thread_torrent *tt = malloc(sizeof(struct thread_torrent));
-                if(torrent){
-                    tt->id = strdup(torrent->id);
-                    memcpy(tt->name,torrent->name,sizeof(torrent->name));
-                    memcpy(tt->hash,torrent->hash,sizeof(torrent->hash));
-                    memcpy(tt->full_path,torrent->full_path,sizeof(torrent->full_path));
-                    memcpy(tt->upload_progress,torrent->upload_progress,sizeof(torrent->upload_progress));
-                    memcpy(tt->download_progress,torrent->download_progress, sizeof(torrent->download_progress));
-                }
-                tt->curl_handle = curl_easy_init();
-                pthread_mutex_init(&tt->mutex,NULL);
-                tt->thread = pthread_self();
-                
-                active_downloads[count_torrent_currently_downloading++] = tt;
-                
-                /* Authenticate the curl_handle thread*/
-                if(authenticate(tt->curl_handle,FMT_QBITTORRENT,getenv("username_qbittorrent"),getenv("password_qbittorrent"),log_file,COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT, COOKIE_QBITTORRENT) != 0){
-                    fprintf(log_file,"[!] Failed to authenticate to qbitorrent\n");
-                    goto cleanup;
-                }
-                
-                if(pthread_create(&tt->thread,NULL,handle_threaded_torrent_download,(void*) tt) != 0){
-                    fprintf(log_file,"[!] Failed to create thread \n");
-                    gui_draw_window_notification(&ctx,"[!] Failed to create thread\n");
-                    break;
+                /* RESULTS */
+                if(ctx.current_windows_state == RESULTS){
+                    if(count_torrent_currently_downloading >= MAX_THREAD){
+                        fprintf(log_file,"[!] Max 5 downloads at a time, please wait\n");
+                        ctx.current_windows_state = SEARCH;
+                        break;
+                    }
+                    curr_torrent = item_userptr(current_item(ctx.menu));
+                    if(!curr_torrent){
+                        fprintf(log_file,"[!] Failed to get item ptr\n");
+                        ctx.current_windows_state = SEARCH;
+                        ctx.tab_changed = true;
+                        break;
+                    }   
+                    /* Create a thread for the new download */
+                    thread_torrent = malloc(sizeof(struct thread_torrent));
+                    if(curr_torrent){
+                        thread_torrent->id = strdup(curr_torrent->id);
+                    }
+                    thread_torrent->curl_handle = curl_easy_init();
+                    if(!thread_torrent->curl_handle){
+                        fprintf(log_file, "[!] Failed to create handle for the torrent\n");
+                        ctx.current_windows_state = SEARCH;
+                        break; 
+                    }
+                    pthread_mutex_init(&thread_torrent->mutex,NULL);
+                    /* Authenticate the curl_handle thread*/
+                    if(authenticate(thread_torrent->curl_handle,FMT_QBITTORRENT,getenv("username_qbittorrent"),getenv("password_qbittorrent"),log_file,COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT, COOKIE_QBITTORRENT) != 0){
+                        fprintf(log_file,"[!] Failed to authenticate to qbitorrent\n");
+                        goto cleanup;
+                    }
+                    
+                    if(pthread_create(&thread_torrent->thread,NULL,handle_threaded_torrent_download,(void*)thread_torrent) != 0){
+                        fprintf(log_file,"[!] Failed to create thread \n");
+                        break;
+                    }
+                    active_downloads[count_torrent_currently_downloading++] = thread_torrent;
+                    ctx.current_windows_state = DOWNLOADS;
+                    ctx.tab_changed = true;
                 }
                 break;
             default:
+                if((ctx.current_windows_state == SEARCH) && (count_user_input < (MAX_INPUT_SIZE - 1)) && (ch != ERR)){
+                    user_input[count_user_input++] = ch;
+                    user_input[count_user_input] = '\0';
+                    ctx.dirty_search = true;
+                }
+                
         }
-        ITEM *item = current_item(ctx.menu);
-        struct torrent *torrent = item_userptr(item);
-        if(!torrent){
-            fprintf(log_file,"[!] Failed to get item ptr\n");
-            goto cleanup;
-        }
-        wclear(ctx.win_description);
-        mvwprintw(ctx.win_description, 1, 1, " Description: %s \n seeders:%s\n size:%s",torrent->information, torrent->seeders,torrent->size);
-        wrefresh(ctx.win_description);
+        
+        gui_render(&ctx, curr_torrent, user_input,info_dt, count_torrent_currently_downloading);
+
  
     }
 

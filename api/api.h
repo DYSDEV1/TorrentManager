@@ -1,7 +1,6 @@
 #ifndef API__H_
 #define API__H_
 
-#define _GNU_SOURCE
 
 #include <stdckdint.h>
 #include <stdio.h>
@@ -45,11 +44,11 @@ struct torrent* search(CURL *curl_handle,const char* search_string, FILE *log_fi
 bool isLogged(CURL *curl_handle, enum cookie_type);
 
 
-int download(CURL *curl_handle,const char* torrent_name, FILE *log_file);
+int download(struct thread_torrent *tt);
 
-int uploadToServer(struct torrent *tr,FILE *log_file);
+int uploadToServer(struct thread_torrent *tt);
 
-int retrieveTorrentInfo(struct torrent *tr,FILE *log_file);
+int retrieveTorrentInfo(struct thread_torrent *tt);
 
 
 /* thread functions */

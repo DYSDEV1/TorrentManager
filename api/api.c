@@ -1,4 +1,6 @@
 #include "api.h"
+#include "types.h"
+#include <curl/curl.h>
 
 int saveHtmlToFile(FILE *html_file,struct curl_response *curl_res){
     html_file = fopen("html_save.html","w");
@@ -328,67 +330,50 @@ struct torrent *search(CURL *curl_handle,const char* search_string,FILE *log_fil
 
 }
 
-int download(CURL *curl_handle,const char *torrent_name, FILE *log_file){
+int download(struct thread_torrent *tt){
     struct curl_response curl_res = {0};
-    CURLcode code_return_curl;
     int code_function_return = 0;
     char* url_download = NULL;
     FILE *torrent_file = NULL;
 
-    if(!isLogged(curl_handle,COOKIE_RUTRACKER)){
-        if(authenticate(curl_handle,FMT_RUTRACKER,getenv("username_rutracker"),getenv("password_rutracker"),log_file, COOKIE_FILENAME_RUTRACKER, ENDPOINT_LOGIN_RUTRACKER, COOKIE_RUTRACKER) != 0){
-            fprintf(log_file,"[!] Failed to authenticate");
-            code_function_return = -1;
-            goto cleanup;
-        }  
+    if(!isLogged(tt->curl_handle,COOKIE_RUTRACKER)){
+        code_function_return = -1;
+        goto cleanup;
     }
 
-    int nb_required_bytes = snprintf(NULL,0,ENDPOINT_DOWNLOAD,torrent_name);
+    int nb_required_bytes = snprintf(NULL,0,ENDPOINT_DOWNLOAD,tt->id);
 
     if(nb_required_bytes < 0){
-        fprintf(log_file,"[!] Failed to alloc url.\n");
         code_function_return = -1;
         goto cleanup;
     }
     url_download = malloc((size_t)(nb_required_bytes + 1));
 
     if(!url_download){
-        fprintf(log_file,"[!] Failed to alloc url.\n");
         code_function_return = -1;
         goto cleanup;
     }
 
-    snprintf(url_download,(size_t)(nb_required_bytes+1),ENDPOINT_DOWNLOAD,torrent_name);
+    snprintf(url_download,(size_t)(nb_required_bytes+1),ENDPOINT_DOWNLOAD,tt->id);
 
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_URL,url_download)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set url.\n");
-        code_function_return = -1;
+    if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_URL,url_download)) != CURLE_OK){
         goto cleanup;
     }
-    if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEFUNCTION, &handleDownloadTorrent)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set writefunction.\n");
-        code_function_return = -1;
+    if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_WRITEFUNCTION, &handleDownloadTorrent)) != CURLE_OK){
         goto cleanup;
     }
 
-    torrent_file = fopen(torrent_name,"wb");
+    torrent_file = fopen(tt->id,"wb");
     if(!torrent_file){
-        fprintf(log_file, "[!] Failed to create torrent file\n");
         code_function_return = -1;
         goto cleanup;
     }
 
-     if((code_function_return = curl_easy_setopt(curl_handle,CURLOPT_WRITEDATA,(void*)torrent_file)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set result structure\n");
-        code_function_return = -1;
+     if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_WRITEDATA,(void*)torrent_file)) != CURLE_OK){
         goto cleanup;
     }
 
-    code_return_curl = curl_easy_perform(curl_handle);
-
-    if(code_return_curl != CURLE_OK){
-        fprintf(log_file,"[!] Failed to execute request\n");
-        code_function_return = -1;
+    if((code_function_return = curl_easy_perform(tt->curl_handle)) != CURLE_OK){
         goto cleanup;
     }
 
@@ -400,121 +385,90 @@ int download(CURL *curl_handle,const char *torrent_name, FILE *log_file){
         if(url_download)
             free(url_download);
     
-    fflush(log_file);
     return code_function_return;
 
 }
 
-int uploadToServer(struct torrent *tr,FILE *log_file){
-    CURLcode code_return_curl;
+int uploadToServer(struct thread_torrent *tt){
     struct curl_response curl_res = {0};
     int code_function_return = 0;
     curl_mime *mime = NULL;
     curl_mimepart *part = NULL;
 
-    if(!isLogged(tr->curl_handle,COOKIE_QBITTORRENT)){
-        if(authenticate(tr->curl_handle,FMT_QBITTORRENT,getenv("username_qbittorrent"),getenv("password_qbittorrent"),log_file, COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT, COOKIE_QBITTORRENT) != 0){
-            fprintf(log_file,"[!] Failed to authenticate");
-            code_function_return = -1;
-            goto cleanup;
-        }  
-    }
-
-    if((code_function_return = curl_easy_setopt(tr->curl_handle,CURLOPT_URL,ENDPOINT_UPLOAD_TORRENT)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set url.\n");
+    if(!isLogged(tt->curl_handle,COOKIE_QBITTORRENT)){
         code_function_return = -1;
         goto cleanup;
     }
 
-    if((mime = curl_mime_init(tr->curl_handle)) == NULL){
-        fprintf(log_file,"[!] Failed to setup mime\n");
+    if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_URL,ENDPOINT_UPLOAD_TORRENT)) != CURLE_OK){
+        goto cleanup;
+    }
+
+    if((mime = curl_mime_init(tt->curl_handle)) == NULL){
         code_function_return = -1;
         goto cleanup;
     }
     /*--- ADD TORRENT ---*/
     if((part = curl_mime_addpart(mime)) == NULL){
-        fprintf(log_file,"[!] Failed to add part for torrent\n");
         code_function_return = -1;
         goto cleanup;
     }
-    if((code_return_curl = curl_mime_filedata(part,tr->name)) != CURLE_OK)
+    if((code_function_return = curl_mime_filedata(part,tt->name)) != CURLE_OK)
     {
-        fprintf(log_file,"[!] Failed to setup the torrent to upload\n");
-        code_function_return = -1;
         goto cleanup;
     }
-    if((code_return_curl = curl_mime_name(part, "torrents")) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set the torrent name\n");
-        code_function_return = -1;
+    if((code_function_return = curl_mime_name(part, "torrents")) != CURLE_OK){
         goto cleanup;
     }
     /*--- ADD TAG ---*/
     if((part = curl_mime_addpart(mime)) == NULL){
-        fprintf(log_file,"[!] Failed to add part for tag\n");
         code_function_return = -1;
         goto cleanup;
     }
-    if((code_return_curl = curl_mime_name(part,"tags")) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set tag name\n");
-        code_function_return = -1;
+    if((code_function_return = curl_mime_name(part,"tags")) != CURLE_OK){
         goto cleanup;
     }
-    if((code_return_curl = curl_mime_data(part,tr->name,strlen(tr->name))) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to add tag data\n");
+    if((code_function_return = curl_mime_data(part,tt->name,strlen(tt->name))) != CURLE_OK){
+        goto cleanup;
+    }
+
+    if((code_function_return = curl_easy_setopt(tt->curl_handle, CURLOPT_MIMEPOST, mime)) != CURLE_OK){
+        goto cleanup;
+    }
+     if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse)) != CURLE_OK){
+        goto cleanup;
+    }
+
+    if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_WRITEDATA,(void*)&curl_res)) != CURLE_OK){
+        goto cleanup;
+    }
+    if((code_function_return = curl_easy_perform(tt->curl_handle)) != CURLE_OK){
+        goto cleanup;
+    }
+    if(!curl_res.html || strstr(curl_res.html,"Ok.") == 0){;
         code_function_return = -1;
         goto cleanup;
     }
 
-
-    if((code_return_curl = curl_easy_setopt(tr->curl_handle, CURLOPT_MIMEPOST, mime)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set mime\n");
+    if(remove(tt->name) != 0){
         code_function_return = -1;
         goto cleanup;
     }
-     if((code_function_return = curl_easy_setopt(tr->curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set writefunction.\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-
-    if((code_function_return = curl_easy_setopt(tr->curl_handle,CURLOPT_WRITEDATA,(void*)&curl_res)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set result structure\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-    if((code_return_curl = curl_easy_perform(tr->curl_handle)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to execute request\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-    if(!curl_res.html || strstr(curl_res.html,"Ok.") == 0){
-        fprintf(log_file,"[!] Failed to upload torrent\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-
-    if(remove(tr->name) != 0){
-        fprintf(log_file,"[!] Failed to delete torrent file\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-
 
     cleanup:
-        curl_easy_setopt(tr->curl_handle, CURLOPT_WRITEDATA, NULL);
-        curl_easy_setopt(tr->curl_handle, CURLOPT_WRITEFUNCTION, NULL);
-        curl_easy_setopt(tr->curl_handle, CURLOPT_MIMEPOST, NULL);
+        curl_easy_setopt(tt->curl_handle, CURLOPT_WRITEDATA, NULL);
+        curl_easy_setopt(tt->curl_handle, CURLOPT_WRITEFUNCTION, NULL);
+        curl_easy_setopt(tt->curl_handle, CURLOPT_MIMEPOST, NULL);
         if(mime)
             curl_mime_free(mime);
         if(curl_res.html)
             free(curl_res.html);
-    fflush(log_file);
     return code_function_return;
 
 }
 
 
-int retrieveTorrentInfo(struct torrent *tr,FILE *log_file){
+int retrieveTorrentInfo(struct thread_torrent *tt){
     struct curl_response curl_res = {0};
     CURLcode code_return_curl;
     int code_function_return = 0;
@@ -523,97 +477,82 @@ int retrieveTorrentInfo(struct torrent *tr,FILE *log_file){
     char* path_ptr = NULL;
     char* name_ptr = NULL;
 
-    curl_easy_setopt(tr->curl_handle, CURLOPT_MIMEPOST, NULL);
-    curl_easy_setopt(tr->curl_handle, CURLOPT_POSTFIELDS, NULL);
-    curl_easy_setopt(tr->curl_handle, CURLOPT_POST, 0L);
-    curl_easy_setopt(tr->curl_handle, CURLOPT_HTTPGET, 1L);
+    curl_easy_setopt(tt->curl_handle, CURLOPT_MIMEPOST, NULL);
+    curl_easy_setopt(tt->curl_handle, CURLOPT_POSTFIELDS, NULL);
+    curl_easy_setopt(tt->curl_handle, CURLOPT_POST, 0L);
+    curl_easy_setopt(tt->curl_handle, CURLOPT_HTTPGET, 1L);
 
 
-    if(!isLogged(tr->curl_handle,COOKIE_QBITTORRENT)){
-        if(authenticate(tr->curl_handle,FMT_QBITTORRENT,getenv("username_qbittorrent"),getenv("password_qbittorrent"),log_file, COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT, COOKIE_QBITTORRENT) != 0){
-            fprintf(log_file,"[!] Failed to authenticate");
-            code_function_return = -1;
-            goto cleanup;
-        }  
+    if(!isLogged(tt->curl_handle,COOKIE_QBITTORRENT)){
+        code_function_return = -1;
+        goto cleanup;
     }
 
-    int nb_required_bytes = snprintf(NULL,0,ENDPOINT_GET_HASH,tr->id);
+    int nb_required_bytes = snprintf(NULL,0,ENDPOINT_GET_HASH,tt->id);
     if(nb_required_bytes < 0){
-        fprintf(log_file, "[!] Failed to allocate bytes for url\n");
         code_function_return = -1;
         goto cleanup;
     }
     if(!(url_retrieve_hash = malloc((size_t)nb_required_bytes+1))){
-        fprintf(log_file, "[!] Failed to allocated bytes for url\n");
         code_function_return = -1;
         goto cleanup;
     }
-    snprintf(url_retrieve_hash,(size_t)nb_required_bytes+1,ENDPOINT_GET_HASH,tr->id);
+    snprintf(url_retrieve_hash,(size_t)nb_required_bytes+1,ENDPOINT_GET_HASH,tt->id);
 
-    if((code_return_curl = curl_easy_setopt(tr->curl_handle,CURLOPT_URL,url_retrieve_hash)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set url for hash retrieve\n");
-        code_function_return = -1;
-        goto cleanup;
-    }
-
-    if((code_function_return = curl_easy_setopt(tr->curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set writefunction.\n");
+    if((code_return_curl = curl_easy_setopt(tt->curl_handle,CURLOPT_URL,url_retrieve_hash)) != CURLE_OK){
         code_function_return = -1;
         goto cleanup;
     }
 
-     if((code_function_return = curl_easy_setopt(tr->curl_handle,CURLOPT_WRITEDATA,(void*)&curl_res)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to set result structure\n");
+    if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_WRITEFUNCTION, &handleCurlResponse)) != CURLE_OK){
         code_function_return = -1;
         goto cleanup;
     }
 
-    if((code_return_curl = curl_easy_perform(tr->curl_handle)) != CURLE_OK){
-        fprintf(log_file,"[!] Failed to execute request\n");
+     if((code_function_return = curl_easy_setopt(tt->curl_handle,CURLOPT_WRITEDATA,(void*)&curl_res)) != CURLE_OK){
+        code_function_return = -1;
+        goto cleanup;
+    }
+
+    if((code_return_curl = curl_easy_perform(tt->curl_handle)) != CURLE_OK){
         code_function_return = -1;
         goto cleanup;
     }
     /* PATH */
     if(!curl_res.html || !(path_ptr = strstr(curl_res.html,HTML_INDICATOR_TORRENT_PATH))){
-        fprintf(log_file,"[!] Failed to retrieve path torrent\n");
         code_function_return = -1;
         goto cleanup;
     }
     path_ptr += strlen(HTML_INDICATOR_TORRENT_PATH);
-    if((sscanf(path_ptr,SSCANF_EXTRACT_TORRENT_PATH,tr->full_path) != 1)){
-        fprintf(log_file,"[!] Failed to retrieve hash\n");
+    if((sscanf(path_ptr,SSCANF_EXTRACT_TORRENT_PATH,tt->full_path) != 1)){
         code_function_return = -1;
         goto cleanup;
     }
     /* NAME */
     if(!curl_res.html || !(name_ptr = strstr(curl_res.html,HTML_INDICATOR_TORRENT_NAME))){
-        fprintf(log_file,"[!] Failed to retrieve torrent name\n");
         code_function_return = -1;
         goto cleanup;
     }
     name_ptr += strlen(HTML_INDICATOR_TORRENT_NAME);
-    if((sscanf(name_ptr,SSCANF_EXTRACT_TORRENT_NAME,tr->name) != 1)){
-        fprintf(log_file,"[!] Failed to retrieve torrent name\n");
+    if((sscanf(name_ptr,SSCANF_EXTRACT_TORRENT_NAME,tt->name) != 1)){
         code_function_return = -1;
         goto cleanup;
     }
 
     if(!curl_res.html || !(hash_ptr = strstr(curl_res.html,HTML_INDICATOR_HASH))){
-        fprintf(log_file,"[!] Failed to retrieve hash info\n");
         code_function_return = -1;
         goto cleanup;
     }
-    if((sscanf(hash_ptr,SSCANF_EXTRACT_HASH,tr->hash) != 1)){
-        fprintf(log_file,"[!] Failed to retrieve hash\n");
+    if((sscanf(hash_ptr,SSCANF_EXTRACT_HASH,tt->hash) != 1)){
         code_function_return = -1;
         goto cleanup;
     }
 
     cleanup:
-        curl_easy_setopt(tr->curl_handle, CURLOPT_POSTFIELDS, NULL);
-        curl_easy_setopt(tr->curl_handle, CURLOPT_POST, 0L);
-        curl_easy_setopt(tr->curl_handle, CURLOPT_WRITEDATA, NULL);
-        curl_easy_setopt(tr->curl_handle, CURLOPT_WRITEFUNCTION, NULL);
+        curl_easy_setopt(tt->curl_handle, CURLOPT_POSTFIELDS, NULL);
+        curl_easy_setopt(tt->curl_handle, CURLOPT_POST, 0L);
+        curl_easy_setopt(tt->curl_handle, CURLOPT_WRITEDATA, NULL);
+        curl_easy_setopt(tt->curl_handle, CURLOPT_WRITEFUNCTION, NULL);
         if(url_retrieve_hash)
             free(url_retrieve_hash);
         if(curl_res.html)
@@ -798,29 +737,42 @@ int downloadFromServer(struct thread_torrent *tt){
 void* handle_threaded_torrent_download(void* arg){
 
     struct thread_torrent *tt = (struct thread_torrent*) arg;
+
     pthread_mutex_lock(&tt->mutex);
-        tt->status = UPLOADING;
+        tt->status = UPLOADING_OR_DOWNLOADING;
     pthread_mutex_unlock(&tt->mutex);
+    if(download(tt) != 0){
+        pthread_mutex_lock(&tt->mutex);
+        tt->status = FAILED;
+        pthread_mutex_unlock(&tt->mutex);
+        return NULL;
+    }
+    if(uploadToServer(tt)){
+        pthread_mutex_lock(&tt->mutex);
+        tt->status = FAILED;
+        pthread_mutex_unlock(&tt->mutex);
+        return NULL;
+    }
+    if(retrieveTorrentInfo(tt)){
+        pthread_mutex_lock(&tt->mutex);
+        tt->status = FAILED;
+        pthread_mutex_unlock(&tt->mutex);
+        return NULL;  
+    }
     if(retrieveUploadProgression(tt) != 0){
         pthread_mutex_lock(&tt->mutex);
         tt->status = FAILED;
         pthread_mutex_unlock(&tt->mutex);
         return NULL;
-    }else{
-        pthread_mutex_lock(&tt->mutex);
-        tt->status = DOWNLOADING;
-        pthread_mutex_unlock(&tt->mutex);
-    }    
+    }
     if(downloadFromServer(tt) != 0){
         pthread_mutex_lock(&tt->mutex);
         tt->status = FAILED;
         pthread_mutex_unlock(&tt->mutex);
         return NULL;
     }
-    else{
-        pthread_mutex_lock(&tt->mutex);
-        tt->status = FINISHED;
-        pthread_mutex_unlock(&tt->mutex);
-    }
+    pthread_mutex_lock(&tt->mutex);
+    tt->status = FINISHED;
+    pthread_mutex_unlock(&tt->mutex);
     return NULL;
 }
