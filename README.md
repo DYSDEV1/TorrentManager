@@ -9,6 +9,8 @@ username_rutracker=your_rutracker_username
 password_rutracker=your_rutracker_password
 username_qbittorrent=your_qbittorrent_username
 password_qbittorrent=your_qbittorrent_password
+download_path=download_path
+server_rsync=username@hostname
 ```
 
 Build:
