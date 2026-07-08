@@ -5,6 +5,7 @@
 #include <curl/curl.h>
 #include <ncurses.h>
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #define MAX_INPUT_SIZE 256
@@ -89,6 +90,8 @@ int main() {
         snprintf(info_dt[i]->download_progress,
                  sizeof(info_dt[i]->download_progress), "%s",
                  active_downloads[i]->download_progress);
+        snprintf(info_dt[i]->name, strlen(active_downloads[i]->name), "%s",
+                 active_downloads[i]->name);
         pthread_mutex_unlock(&active_downloads[i]->mutex);
       }
       if ((curr_status == FINISHED) || (curr_status == FAILED)) {
@@ -251,7 +254,7 @@ int main() {
     default:
       if ((ctx.current_windows_state == SEARCH) &&
           (size_user_input < (MAX_INPUT_SIZE - 1)) && (input_ch != ERR)) {
-        user_input[size_user_input++] = input_ch;
+        user_input[size_user_input++] = (char)input_ch;
         user_input[size_user_input] = '\0';
         ctx.dirty_search = true;
       }

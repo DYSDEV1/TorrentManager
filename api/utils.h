@@ -2,8 +2,10 @@
 #define UTILS__H_
 #include "types.h"
 #include <iconv.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
 #define HTML_INDICATOR_DESC "<a data-topic_id="
 #define HTML_INDICATOR_SEEDERS "<b class=\"seedmed\">"
 #define HTML_INDICATOR_SIZE "class=\"small tr-dl dl-stub\""
@@ -27,10 +29,9 @@
 #define SIZE_ARRAY 32
 #define SIZE_UNIT_ARRAY 8
 
-
-struct torrent* parse(struct curl_response *curl_res);
-
+struct torrent *parse(struct curl_response *curl_res);
 void torrents_cleanup(struct torrent *torrents_list);
-char* remove_non_utf8_char(char* str);
+char *remove_non_utf8_char(char *str);
+char *alloc_format(const char *fmt, ...);
 
 #endif
