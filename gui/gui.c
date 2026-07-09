@@ -322,12 +322,10 @@ void gui_render(struct ctx *ctx, struct torrent *curr_torrent, char *user_input,
     mvwprintw(ctx->win_downloads, 0, 1, "Downloads");
     int index = 0;
     for (int i = 0; i < count_torrent_currently_downloading; i++) {
-      mvwprintw(ctx->win_downloads, (index), 0,
+      mvwprintw(ctx->win_downloads, (index+1), 0,
                 "%s :", active_downloads[i]->name);
-      mvwprintw(ctx->win_downloads, (index + 1), 0, "%s",
-                active_downloads[i]->upload_progress);
-      mvwprintw(ctx->win_downloads, (index + 2), 0, "%s",
-                active_downloads[i]->download_progress);
+      mvwprintw(ctx->win_downloads, (index + 2), 1, "%s",active_downloads[i]->upload_progress);
+      mvwprintw(ctx->win_downloads, (index + 3), 1, "%s",active_downloads[i]->download_progress);
       index += 4;
     }
     wnoutrefresh(ctx->win_downloads);

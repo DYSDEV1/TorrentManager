@@ -25,7 +25,7 @@ struct torrent {
   CURL *curl_handle;
 };
 
-enum thread_status { UPLOADING_OR_DOWNLOADING, FAILED, FINISHED };
+enum thread_status { INIT,UPLOADING_OR_DOWNLOADING, FAILED, FINISHED };
 
 struct thread_torrent {
   pthread_t thread;

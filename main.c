@@ -90,7 +90,7 @@ int main() {
         snprintf(info_dt[i]->download_progress,
                  sizeof(info_dt[i]->download_progress), "%s",
                  active_downloads[i]->download_progress);
-        snprintf(info_dt[i]->name, strlen(active_downloads[i]->name), "%s",
+        snprintf(info_dt[i]->name, sizeof(active_downloads[i]->name), "%s",
                  active_downloads[i]->name);
         pthread_mutex_unlock(&active_downloads[i]->mutex);
       }
@@ -222,6 +222,7 @@ int main() {
         if (selected_torrent) {
           thread_torrent->id = strdup(selected_torrent->id);
         }
+        thread_torrent->status = INIT;
         thread_torrent->curl_handle = curl_easy_init();
         if (!thread_torrent->curl_handle) {
           fprintf(log_file, "[!] Failed to create handle for the torrent\n");

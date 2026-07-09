@@ -3,6 +3,7 @@
 #include "utils.h"
 #include <curl/curl.h>
 #include <curl/easy.h>
+#include <pthread.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -247,9 +248,13 @@ struct torrent *search(CURL *curl_handle, const char *search_string,
     code_function_return = -1;
     goto cleanup;
   }
-  if (!(url_search =
-            alloc_format(ENDPOINT_SEARCH_RUTRACKER, encoded_search_string))) {
+  if (!(url_search = alloc_format(ENDPOINT_SEARCH_RUTRACKER, encoded_search_string))) {
     fprintf(log_file, "[!] Failed to allocated url\n");
+    code_function_return = -1;
+    goto cleanup;
+  }
+  if(!(postfields = alloc_format(POSTFIELDS_SEARCH,encoded_search_string))){
+    fprintf(log_file, "[!] Failed to allocate postfields\n");
     code_function_return = -1;
     goto cleanup;
   }
@@ -393,7 +398,7 @@ int uploadToServer(struct thread_torrent *torrent_thread) {
 
   if ((code_function_return =
            curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_URL,
-                            ENDPOINT_UPLOAD_TORRENT)) != CURLE_OK) {
+                            url)) != CURLE_OK) {
     goto cleanup;
   }
 
@@ -582,8 +587,7 @@ int retrieveUploadProgression(struct thread_torrent *torrent_thread) {
     code_function_return = -1;
     goto cleanup;
   }
-  if (!(alloc_format(ENDPOINT_GET_TORRENT_PROGRESSION, username,
-                     torrent_thread->hash))) {
+  if (!(url = alloc_format(ENDPOINT_GET_TORRENT_PROGRESSION, username,torrent_thread->hash))) {
     code_function_return = -1;
     goto cleanup;
   }
@@ -598,8 +602,7 @@ int retrieveUploadProgression(struct thread_torrent *torrent_thread) {
     goto cleanup;
   }
 
-  if ((code_function_return =
-           curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEDATA,
+  if ((code_function_return = curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEDATA,
                             (void *)&curl_res)) != CURLE_OK) {
     goto cleanup;
   }
@@ -666,7 +669,7 @@ int downloadFromServer(struct thread_torrent *torrent_thread) {
     goto cleanup;
   }
   if (!(full_rsync_path =
-            alloc_format(endpoint_rsync, torrent_thread->full_path))) {
+            alloc_format("%s:%s",endpoint_rsync, torrent_thread->full_path))) {
     code_function_return = -1;
     goto cleanup;
   }
@@ -738,7 +741,6 @@ cleanup:
 void *handle_threaded_torrent_download(void *arg) {
 
   struct thread_torrent *torrent_thread = (struct thread_torrent *)arg;
-
   pthread_mutex_lock(&torrent_thread->mutex);
   torrent_thread->status = UPLOADING_OR_DOWNLOADING;
   pthread_mutex_unlock(&torrent_thread->mutex);
