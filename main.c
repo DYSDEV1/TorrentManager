@@ -171,10 +171,11 @@ int main() {
       if (ctx.current_windows_state == SEARCH) {
         /* SEARCH  */
         user_input[size_user_input] = '\0';
-        size_user_input = 0;
         torrents_cleanup(torrents_list);
         torrents_list = NULL;
         torrents_list = search(curl_handle_rutracker, user_input, log_file);
+        memset(user_input,0,size_user_input);
+        size_user_input = 0;
         if (!torrents_list) {
           continue;
         }
@@ -216,7 +217,7 @@ int main() {
          *  - retrieve download status on qbittorent
          *  - retrieve final file/directory with rsync
          */
-        thread_torrent = malloc(sizeof(struct thread_torrent));
+        thread_torrent = calloc(1,sizeof(struct thread_torrent));
         info_dt[count_torrent_currently_downloading] =
             calloc(1, sizeof(struct info_download_torrents));
         if (selected_torrent) {

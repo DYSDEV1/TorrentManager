@@ -5,9 +5,9 @@
 
 int gui_init(struct ctx *ctx) {
   initscr();
-  refresh();
   cbreak();
   noecho();
+  curs_set(0);
   keypad(stdscr, TRUE);
   getmaxyx(stdscr, ctx->height_max, ctx->width_max);
   nodelay(stdscr, TRUE);
@@ -291,6 +291,7 @@ void gui_render(struct ctx *ctx, struct torrent *curr_torrent, char *user_input,
     wnoutrefresh(ctx->win_tabs);
     ctx->tab_changed = false;
   }
+  /* Redraw modified items */
   if (ctx->dirty_menu) {
     box(ctx->win_menu, 0, 0);
     mvwprintw(ctx->win_menu, 0, 1, "Results");
@@ -301,8 +302,7 @@ void gui_render(struct ctx *ctx, struct torrent *curr_torrent, char *user_input,
     werase(ctx->win_search_bar);
     box(ctx->win_search_bar, 0, 0);
     mvwprintw(ctx->win_search_bar, 0, 1, "search");
-    wmove(ctx->win_search_bar, 1, 1);
-    wprintw(ctx->win_search_bar, "%s", user_input);
+    mvwprintw(ctx->win_search_bar,1,1,"%s", user_input);
     ctx->dirty_search = false;
     wnoutrefresh(ctx->win_search_bar);
   }
@@ -329,6 +329,13 @@ void gui_render(struct ctx *ctx, struct torrent *curr_torrent, char *user_input,
       index += 4;
     }
     wnoutrefresh(ctx->win_downloads);
+  }
+  if (ctx->current_windows_state == SEARCH) {
+    wmove(ctx->win_search_bar, 1, 1 + (int)strlen(user_input));
+    wnoutrefresh(ctx->win_search_bar);   
+    curs_set(1);
+  } else {
+    curs_set(0);
   }
   doupdate();
 }

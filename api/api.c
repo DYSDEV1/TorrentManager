@@ -455,11 +455,11 @@ int uploadToServer(struct thread_torrent *torrent_thread) {
     code_function_return = -1;
     goto cleanup;
   }
-  /*
-  if(remove(torrent_thread->name) != 0){
+  
+  if(remove(torrent_thread->id) != 0){
       code_function_return = -1;
       goto cleanup;
-  }*/
+  }
 
 cleanup:
   curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEDATA, NULL);
