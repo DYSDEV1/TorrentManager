@@ -1,10 +1,13 @@
 #include "api/api.h"
 #include "api/env.h"
 #include "api/types.h"
+#include "api/utils.h"
 #include "gui/gui.h"
 #include <curl/curl.h>
+#include <menu.h>
 #include <ncurses.h>
 #include <pthread.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -21,27 +24,35 @@ int main() {
   struct thread_torrent *thread_torrent = {0};
   struct torrent *torrents_list = {0};
   struct torrent *selected_torrent = {0};
+  enum thread_status curr_status;
+  struct downloaded_movies_list *dl_movies_list = {0};
+
 
   int count_torrent_currently_downloading = 0;
   char user_input[MAX_INPUT_SIZE];
   int size_user_input;
 
+  CURL *curl_handle_rutracker = NULL;
+  CURL *curl_handle_qbittorrent = NULL;
+  CURL *curl_handle_sftp = NULL;
+
+
   log_file = fopen("logs.txt", "w");
-  if (log_file == NULL) {
+  if (!log_file) {
     goto cleanup;
   }
   curl_global_init(CURL_GLOBAL_ALL);
-  CURL *curl_handle_rutracker = curl_easy_init();
+  curl_handle_rutracker = curl_easy_init();
   if (!curl_handle_rutracker) {
     fprintf(log_file, "[!] Failed to create curl handle for rutracker\n");
     goto cleanup;
   }
-  CURL *curl_handle_qbitorrent = curl_easy_init();
-  if (!curl_handle_qbitorrent) {
+  curl_handle_qbittorrent = curl_easy_init();
+  if (!curl_handle_qbittorrent) {
     fprintf(log_file, "[!] Failed to create curl handle for qbitorrent\n");
     goto cleanup;
   }
-  CURL *curl_handle_sftp = curl_easy_init();
+  curl_handle_sftp = curl_easy_init();
   if (!curl_handle_sftp) {
     fprintf(log_file, "[!] Failed to create curl handle for sftp\n");
     goto cleanup;
@@ -60,7 +71,7 @@ int main() {
     goto cleanup;
   }
 
-  if (authenticate(curl_handle_qbitorrent, FMT_QBITTORRENT,
+  if (authenticate(curl_handle_qbittorrent, FMT_QBITTORRENT,
                    getenv("username_qbittorrent"),
                    getenv("password_qbittorrent"), log_file,
                    COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT,
@@ -73,8 +84,17 @@ int main() {
   ctx.tab_changed = true;
   ctx.is_result = false;
   size_user_input = 0;
+
+  /* init and populate downloaded movies tab*/
+  if(!(dl_movies_list = enumerate_movies(log_file))){
+    fprintf(log_file, "[!] Failed to retrieve downloaded movies\n");
+    goto cleanup;
+  }
+  if(gui_create_downloaded_movies_menu(dl_movies_list, &ctx) != 0){
+    fprintf(log_file, "[!] Failed to create downloaded movies menu\n");
+    goto cleanup;
+  }
   while (!exit) {
-    enum thread_status curr_status;
     /*Retrieve Torrent download update*/
     for (int i = 0; (i < count_torrent_currently_downloading) &&
                     (count_torrent_currently_downloading > 0);
@@ -108,6 +128,11 @@ int main() {
           i--;
         }
         count_torrent_currently_downloading--;
+        ctx.dirty_menu_downloaded_movies = true;
+        if(!(dl_movies_list = enumerate_movies(log_file))){
+          fprintf(log_file, "[!] Failed to retrieve downloaded movies\n");
+          goto cleanup;
+        }
       }
     }
     /* Handle user input*/
@@ -118,8 +143,8 @@ int main() {
       goto cleanup;
     case KEY_UP:
       if (ctx.current_windows_state == RESULTS) {
-        menu_driver(ctx.menu, REQ_UP_ITEM);
-        selected_torrent = item_userptr(current_item(ctx.menu));
+        menu_driver(ctx.menu_obj_torrents_result.menu, REQ_UP_ITEM);
+        selected_torrent = item_userptr(current_item(ctx.menu_obj_torrents_result.menu));
         if (!selected_torrent) {
           fprintf(log_file, "[!] Failed to get item ptr\n");
           goto cleanup;
@@ -127,17 +152,25 @@ int main() {
         ctx.dirty_menu = true;
         ctx.dirty_description = true;
       }
+      if(ctx.current_windows_state == DOWNLOADED_MOVIES){
+        menu_driver(ctx.menu_obj_movies_downloaded.menu, REQ_UP_ITEM);
+        ctx.dirty_menu_downloaded_movies = true;
+      }
       break;
     case KEY_DOWN:
       if (ctx.current_windows_state == RESULTS) {
-        menu_driver(ctx.menu, REQ_DOWN_ITEM);
-        selected_torrent = item_userptr(current_item(ctx.menu));
+        menu_driver(ctx.menu_obj_torrents_result.menu, REQ_DOWN_ITEM);
+        selected_torrent = item_userptr(current_item(ctx.menu_obj_torrents_result.menu));
         if (!selected_torrent) {
           fprintf(log_file, "[!] Failed to get item ptr\n");
           goto cleanup;
         }
         ctx.dirty_menu = true;
         ctx.dirty_description = true;
+      }
+      if(ctx.current_windows_state == DOWNLOADED_MOVIES){
+        menu_driver(ctx.menu_obj_movies_downloaded.menu, REQ_DOWN_ITEM);
+        ctx.dirty_menu_downloaded_movies = true;
       }
       break;
     case KEY_LEFT:
@@ -147,16 +180,26 @@ int main() {
       }
       break;
     case KEY_RIGHT:
-      if ((ctx.current_windows_state < 2) && (ctx.is_result)) {
+      if ((ctx.current_windows_state < 3) && (ctx.is_result)) {
         ctx.tab_changed = true;
         ctx.current_windows_state++;
       }
       break;
     case KEY_NPAGE:
-      menu_driver(ctx.menu, REQ_SCR_DPAGE);
+      if(ctx.current_windows_state == RESULTS){
+        menu_driver(ctx.menu_obj_torrents_result.menu, REQ_SCR_DPAGE);
+      }
+      if(ctx.current_windows_state == DOWNLOADED_MOVIES){
+        menu_driver(ctx.menu_obj_movies_downloaded.menu, REQ_SCR_DPAGE);
+      }
       break;
     case KEY_PPAGE:
-      menu_driver(ctx.menu, REQ_SCR_UPAGE);
+     if(ctx.current_windows_state == RESULTS){
+        menu_driver(ctx.menu_obj_torrents_result.menu, REQ_SCR_UPAGE);
+      }
+      if(ctx.current_windows_state == DOWNLOADED_MOVIES){
+        menu_driver(ctx.menu_obj_movies_downloaded.menu, REQ_SCR_UPAGE);
+      }
       break;
     case KEY_BACKSPACE:
       if (ctx.current_windows_state == SEARCH) {
@@ -174,23 +217,24 @@ int main() {
         torrents_cleanup(torrents_list);
         torrents_list = NULL;
         torrents_list = search(curl_handle_rutracker, user_input, log_file);
-        memset(user_input,0,size_user_input);
+        memset(user_input,0,(size_t)size_user_input);
         size_user_input = 0;
         if (!torrents_list) {
+          ctx.dirty_search = true;
           continue;
         }
         if (gui_create_menu(torrents_list, &ctx) != 0) {
           fprintf(log_file, "[!] Failed to create menu\n");
           goto cleanup;
         }
-        if (!ctx.menu) {
+        if (!ctx.menu_obj_torrents_result.menu) {
           fprintf(log_file, "[!] Ctx menu not posted\n");
           goto cleanup;
         }
         ctx.is_result = true;
         ctx.tab_changed = true;
         ctx.current_windows_state = RESULTS;
-        selected_torrent = item_userptr(current_item(ctx.menu));
+        selected_torrent = item_userptr(current_item(ctx.menu_obj_torrents_result.menu));
         continue;
       }
       /* download the torrent file from rtorrent*/
@@ -200,7 +244,7 @@ int main() {
           ctx.current_windows_state = SEARCH;
           break;
         }
-        selected_torrent = item_userptr(current_item(ctx.menu));
+        selected_torrent = item_userptr(current_item(ctx.menu_obj_torrents_result.menu));
         if (!selected_torrent) {
           fprintf(log_file, "[!] Failed to get item ptr\n");
           ctx.current_windows_state = SEARCH;
@@ -267,20 +311,28 @@ int main() {
   }
 
 cleanup:
-  gui_menu_cleanup(&ctx);
+  gui_menu_cleanup(&ctx.menu_obj_torrents_result);
+  gui_menu_cleanup(&ctx.menu_obj_movies_downloaded);
   torrents_cleanup(torrents_list);
   if (log_file)
     fclose(log_file);
   if (curl_handle_rutracker)
     curl_easy_cleanup(curl_handle_rutracker);
-  if (curl_handle_qbitorrent)
-    curl_easy_cleanup(curl_handle_qbitorrent);
+  if (curl_handle_qbittorrent)
+    curl_easy_cleanup(curl_handle_qbittorrent);
   if (curl_handle_sftp)
     curl_easy_cleanup(curl_handle_sftp);
+  if(dl_movies_list){
+    for(int i=0;i<dl_movies_list->number_of_movies;i++){
+      free(dl_movies_list->movies_list[i]);
+    }
+    free(dl_movies_list);
+  }
   delwin(ctx.win_search_bar);
-  ctx.win_search_bar = NULL;
   delwin(ctx.win_description);
-  ctx.win_description = NULL;
+  delwin(ctx.win_menu);
+  delwin(ctx.win_tabs);
+  delwin(ctx.win_menu_downloaded_movies);
   endwin();
   curl_global_cleanup();
 

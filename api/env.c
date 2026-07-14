@@ -5,7 +5,9 @@ int loadEnv(){
     FILE *env_file;
     char* line = NULL;
     size_t line_size = 0;
-    env_file = fopen(".env","r");
+    char path[512];
+    snprintf(path, sizeof(path), "%s/.config/torrent_manager/.env", getenv("HOME"));
+    env_file = fopen(path,"r");
     if(env_file == NULL){
         fprintf(stderr,"[!] Failed to load file env\n");
         return -1;

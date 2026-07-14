@@ -1,6 +1,7 @@
 #ifndef TYPES__H_
 #define TYPES__H_
 #include <curl/curl.h>
+#include <dirent.h>
 #include <pthread.h>
 #include <stdio.h>
 
@@ -44,6 +45,11 @@ struct info_download_torrents {
   char upload_progress[40];
   char download_progress[128];
   char name[128];
+};
+
+struct downloaded_movies_list{
+  struct dirent **movies_list;
+  int number_of_movies;
 };
 
 enum cookie_type { COOKIE_RUTRACKER, COOKIE_QBITTORRENT };
