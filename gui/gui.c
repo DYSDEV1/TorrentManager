@@ -184,7 +184,8 @@ int gui_create_downloaded_movies_menu(struct downloaded_movies_list *movies_list
   ctx->menu_obj_movies_downloaded.nb_items = movies_list->number_of_movies;
   ctx->menu_obj_movies_downloaded.items = (ITEM **)calloc((size_t)(ctx->menu_obj_movies_downloaded.nb_items + 1), sizeof(ITEM *));
   for(int i=0; i<ctx->menu_obj_movies_downloaded.nb_items;i++){
-    ctx->menu_obj_movies_downloaded.items[i] = new_item((const char*)movies_list->movies_list[i]->d_name,NULL);
+    ctx->menu_obj_movies_downloaded.items[i] = new_item((const char*)movies_list->movies_list_name_cleaned[i],NULL);
+    set_item_userptr(ctx->menu_obj_movies_downloaded.items[i],movies_list->movies_list[i]);
   }
   ctx->menu_obj_movies_downloaded.items[ctx->menu_obj_movies_downloaded.nb_items] = NULL;
   ctx->menu_obj_movies_downloaded.menu = new_menu((ITEM **)ctx->menu_obj_movies_downloaded.items);
@@ -245,21 +246,23 @@ void gui_render(struct ctx *ctx, struct torrent *curr_torrent, char *user_input,
     }
     if (ctx->current_windows_state == RESULTS) {
       /* draw menu */
-      unpost_menu(ctx->menu_obj_torrents_result.menu);
-      post_menu(ctx->menu_obj_torrents_result.menu);
-      box(ctx->win_menu, 0, 0);
-      mvwprintw(ctx->win_menu, 0, 1, "Results");
-      wnoutrefresh(ctx->win_menu);
-      /* draw description */
-      box(ctx->win_description, 0, 0);
-      mvwprintw(ctx->win_description, 0, 1, "Informations");
-      if (curr_torrent->information) {
-        mvwprintw(ctx->win_description, 1, 1,
-                  " Description: %s \n seeders:%s\n size:%s",
-                  curr_torrent->information, curr_torrent->seeders,
-                  curr_torrent->size);
+      if(ctx->is_result){
+        unpost_menu(ctx->menu_obj_torrents_result.menu);
+        post_menu(ctx->menu_obj_torrents_result.menu);
+        box(ctx->win_menu, 0, 0);
+        mvwprintw(ctx->win_menu, 0, 1, "Results");
+        wnoutrefresh(ctx->win_menu);
+        /* draw description */
+        box(ctx->win_description, 0, 0);
+        mvwprintw(ctx->win_description, 0, 1, "Informations");
+        if (curr_torrent->information) {
+          mvwprintw(ctx->win_description, 1, 1,
+                    " Description: %s \n seeders:%s\n size:%s",
+                    curr_torrent->information, curr_torrent->seeders,
+                    curr_torrent->size);
+        }
+        wnoutrefresh(ctx->win_description);
       }
-      wnoutrefresh(ctx->win_description);
     }
     /* draw tabs */
     if (ctx->current_windows_state == SEARCH) {

@@ -49,6 +49,7 @@ struct info_download_torrents {
 
 struct downloaded_movies_list{
   struct dirent **movies_list;
+  char **movies_list_name_cleaned;
   int number_of_movies;
 };
 

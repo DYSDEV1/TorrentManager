@@ -2,11 +2,13 @@
 #include "types.h"
 #include <ncurses.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 void free_torrent(struct torrent *torrent) {
   if (!torrent)
@@ -105,6 +107,21 @@ struct torrent *parse(struct curl_response *curl_res) {
   return head;
 }
 
+void downloaded_movies_list_cleanup(struct downloaded_movies_list *dl_movies_list){
+  if(dl_movies_list){
+    for(int i=0;i<dl_movies_list->number_of_movies;i++){
+      if(dl_movies_list->movies_list[i])
+        free(dl_movies_list->movies_list[i]);
+      if(dl_movies_list->movies_list_name_cleaned[i])
+        free(dl_movies_list->movies_list_name_cleaned[i]);
+    }
+    free(dl_movies_list->movies_list);
+    free(dl_movies_list->movies_list_name_cleaned);
+    free(dl_movies_list);
+  }
+}
+
+
 void torrents_cleanup(struct torrent *torrents_list) {
   while (torrents_list != NULL) {
     struct torrent *next = torrents_list->next;
@@ -151,13 +168,11 @@ char *alloc_format(const char *fmt, ...) {
 }
 
 int filter_movies(const struct dirent *entry){
-  return entry->d_name[0] != '.';
+  return !(entry->d_name[0] == '.') && (strcasecmp("subtitles", entry->d_name) != 0);                           
 }
-
 
 struct downloaded_movies_list* enumerate_movies(FILE *log_file){
   const char* download_path = getenv("download_path");
-  char* cleaned_movie_name = NULL;
   struct downloaded_movies_list *movies_list = calloc(1, sizeof(struct downloaded_movies_list));
   if(!movies_list){
     fprintf(log_file, "[!] Failed to alloc movies_list\n");
@@ -172,14 +187,14 @@ struct downloaded_movies_list* enumerate_movies(FILE *log_file){
     free(movies_list);
     return NULL;
   }
+  movies_list->movies_list_name_cleaned = malloc((size_t)movies_list->number_of_movies * sizeof(*movies_list->movies_list_name_cleaned));
   for(int i=0;i<movies_list->number_of_movies;i++){
-    cleaned_movie_name = clean_str(movies_list->movies_list[i]->d_name);
-    if(!cleaned_movie_name){
+    movies_list->movies_list_name_cleaned[i] = clean_str(movies_list->movies_list[i]->d_name);
+    if(!movies_list->movies_list_name_cleaned[i]){
       fprintf(log_file, "[!] Failed to clean movies name\n");
       continue;
     }
-    strcpy(movies_list->movies_list[i]->d_name, cleaned_movie_name);
-    free(cleaned_movie_name);
   }
   return movies_list;
 }
+

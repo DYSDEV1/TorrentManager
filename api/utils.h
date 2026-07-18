@@ -33,6 +33,7 @@
 
 struct torrent *parse(struct curl_response *curl_res);
 void torrents_cleanup(struct torrent *torrents_list);
+void downloaded_movies_list_cleanup(struct downloaded_movies_list *dl_movies_list);
 char *clean_str(char *str);
 char *alloc_format(const char *fmt, ...);
 struct downloaded_movies_list* enumerate_movies(FILE *log_file);
