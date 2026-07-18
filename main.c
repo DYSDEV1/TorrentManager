@@ -129,6 +129,7 @@ int main() {
         curl_easy_cleanup(active_downloads[i]->curl_handle);
         free(active_downloads[i]->id);
         free(active_downloads[i]);
+        free(info_dt[i]);
         /* Edge case if it is the last download*/
         if (count_torrent_currently_downloading == 1) {
           active_downloads[i] = 0;
@@ -390,8 +391,6 @@ cleanup:
     curl_easy_cleanup(curl_handle_qbittorrent);
   if (curl_handle_sftp)
     curl_easy_cleanup(curl_handle_sftp);
-  if(full_path_mpv_movie)
-    free(full_path_mpv_movie);
 
   /*cleanup gui */
   delwin(ctx.win_search_bar);
@@ -401,6 +400,7 @@ cleanup:
   delwin(ctx.win_menu_downloaded_movies);
   endwin();
   curl_global_cleanup();
+
 
   return 0;
 }

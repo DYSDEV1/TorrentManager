@@ -379,7 +379,7 @@ int uploadToServer(struct thread_torrent *torrent_thread) {
   int code_function_return = 0;
   curl_mime *mime = NULL;
   curl_mimepart *part = NULL;
-  const char *url = NULL;
+  char *url = NULL;
   const char *user = getenv("username_qbittorrent");
 
   if (!isLogged(torrent_thread->curl_handle, COOKIE_QBITTORRENT)) {
@@ -465,6 +465,8 @@ cleanup:
   curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEDATA, NULL);
   curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEFUNCTION, NULL);
   curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_MIMEPOST, NULL);
+  if(url)
+    free(url);
   if (mime)
     curl_mime_free(mime);
   if (curl_res.html)
