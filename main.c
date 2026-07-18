@@ -193,14 +193,22 @@ int main() {
         break;
       case KEY_LEFT:
         if (ctx.current_windows_state != 0) {
+          if(!ctx.is_result){
+            ctx.current_windows_state = SEARCH;
+          }else{
+            ctx.current_windows_state --;
+          }
           ctx.tab_changed = true;
-          ctx.current_windows_state--;
         }
         break;
       case KEY_RIGHT:
         if ((ctx.current_windows_state < 3)) {
+          if(!ctx.is_result){
+            ctx.current_windows_state = DOWNLOADED_MOVIES;
+          }else{
+            ctx.current_windows_state ++;
+          }
           ctx.tab_changed = true;
-          ctx.current_windows_state++;
         }
         break;
       case KEY_NPAGE:
