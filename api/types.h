@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <stdio.h>
 
+
 #define MAX_THREAD 5
 #define DOWNLOAD_PROGRESS_BUFFER_SIZE 128
 #define UPLOAD_PROGRESS_BUFFER_SIZE 40
@@ -33,6 +34,7 @@ struct thread_torrent {
   pthread_mutex_t mutex;
   CURL *curl_handle;
   char *id;
+  char* full_path_torrent_file;
   char name[128];
   char hash[65];
   char full_path[4096];

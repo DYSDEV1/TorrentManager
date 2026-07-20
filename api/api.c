@@ -1,4 +1,5 @@
 #include "api.h"
+#include "config_file.h"
 #include "types.h"
 #include "utils.h"
 #include <curl/curl.h>
@@ -224,7 +225,7 @@ cleanup:
 }
 
 struct torrent *search(CURL *curl_handle, const char *search_string,
-                       FILE *log_file) {
+                       FILE *log_file, const char* full_path_cookie_rutracker) {
   struct curl_response curl_res = {0};
   int code_function_return = 0;
   char *url_search = NULL;
@@ -234,7 +235,7 @@ struct torrent *search(CURL *curl_handle, const char *search_string,
   if (!isLogged(curl_handle, COOKIE_RUTRACKER)) {
     if (authenticate(curl_handle, FMT_RUTRACKER, getenv("username_rutracker"),
                      getenv("password_rutracker"), log_file,
-                     COOKIE_FILENAME_RUTRACKER, ENDPOINT_LOGIN_RUTRACKER,
+                     full_path_cookie_rutracker, ENDPOINT_LOGIN_RUTRACKER,
                      COOKIE_RUTRACKER) != 0) {
       fprintf(log_file, "[!] Failed to authenticate");
       code_function_return = -1;
@@ -309,7 +310,7 @@ cleanup:
     return torrents_list;
   }
 }
-int download(CURL *curl_handle, const char *torrent_name, FILE *log_file) {
+int download(CURL *curl_handle, const char *torrent_name,const char* full_path_torrent_file, FILE *log_file, const char* full_path_cookie_rutracker) {
   struct curl_response curl_res = {0};
   int code_function_return = 0;
   char *url_download = NULL;
@@ -318,7 +319,7 @@ int download(CURL *curl_handle, const char *torrent_name, FILE *log_file) {
   if (!isLogged(curl_handle, COOKIE_RUTRACKER)) {
     if (authenticate(curl_handle, FMT_RUTRACKER, getenv("username_rutracker"),
                      getenv("password_rutracker"), log_file,
-                     COOKIE_FILENAME_RUTRACKER, ENDPOINT_LOGIN_RUTRACKER,
+                     full_path_cookie_rutracker, ENDPOINT_LOGIN_RUTRACKER,
                      COOKIE_RUTRACKER) != 0) {
       fprintf(log_file, "[!] Failed to authenticate");
       code_function_return = -1;
@@ -344,7 +345,7 @@ int download(CURL *curl_handle, const char *torrent_name, FILE *log_file) {
     goto cleanup;
   }
 
-  torrent_file = fopen(torrent_name, "wb");
+  torrent_file = fopen(full_path_torrent_file, "wb");
   if (!torrent_file) {
     fprintf(log_file, "[!] Failed to create torrent file\n");
     code_function_return = -1;
@@ -375,104 +376,85 @@ cleanup:
 }
 
 int uploadToServer(struct thread_torrent *torrent_thread) {
-  struct curl_response curl_res = {0};
-  int code_function_return = 0;
-  curl_mime *mime = NULL;
-  curl_mimepart *part = NULL;
-  char *url = NULL;
-  const char *user = getenv("username_qbittorrent");
+    struct curl_response curl_res = {0};
+    int code_function_return = 0;
+    curl_mime *mime = NULL;
+    curl_mimepart *part = NULL;
+    char *url = NULL;
+    const char *user = getenv("username_qbittorrent");
 
-  if (!isLogged(torrent_thread->curl_handle, COOKIE_QBITTORRENT)) {
-    code_function_return = -1;
-    goto cleanup;
-  }
-  if (!user) {
-    code_function_return = -1;
-    goto cleanup;
-  }
-
-  if (!(url = alloc_format(ENDPOINT_UPLOAD_TORRENT, user))) {
-    code_function_return = -1;
-    goto cleanup;
-  }
-
-  if ((code_function_return =
-           curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_URL,
-                            url)) != CURLE_OK) {
-    goto cleanup;
-  }
-
-  if ((mime = curl_mime_init(torrent_thread->curl_handle)) == NULL) {
-    code_function_return = -1;
-    goto cleanup;
-  }
-  /*--- ADD TORRENT ---*/
-  if ((part = curl_mime_addpart(mime)) == NULL) {
-    code_function_return = -1;
-    goto cleanup;
-  }
-  if ((code_function_return = curl_mime_filedata(part, torrent_thread->id)) !=
-      CURLE_OK) {
-    goto cleanup;
-  }
-  if ((code_function_return = curl_mime_name(part, "torrents")) != CURLE_OK) {
-    goto cleanup;
-  }
-  /*--- ADD TAG ---*/
-  if ((part = curl_mime_addpart(mime)) == NULL) {
-    code_function_return = -1;
-    goto cleanup;
-  }
-  if ((code_function_return = curl_mime_name(part, "tags")) != CURLE_OK) {
-    goto cleanup;
-  }
-  if ((code_function_return = curl_mime_data(
-           part, torrent_thread->id, strlen(torrent_thread->id))) != CURLE_OK) {
-    goto cleanup;
-  }
-
-  if ((code_function_return = curl_easy_setopt(
-           torrent_thread->curl_handle, CURLOPT_MIMEPOST, mime)) != CURLE_OK) {
-    goto cleanup;
-  }
-  if ((code_function_return =
-           curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEFUNCTION,
-                            &handleCurlResponse)) != CURLE_OK) {
-    goto cleanup;
-  }
-
-  if ((code_function_return =
-           curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEDATA,
-                            (void *)&curl_res)) != CURLE_OK) {
-    goto cleanup;
-  }
-  if ((code_function_return = curl_easy_perform(torrent_thread->curl_handle)) !=
-      CURLE_OK) {
-    goto cleanup;
-  }
-  if (!curl_res.html || strstr(curl_res.html, "Ok.") == 0) {
-    ;
-    code_function_return = -1;
-    goto cleanup;
-  }
-  
-  if(remove(torrent_thread->id) != 0){
-      code_function_return = -1;
-      goto cleanup;
-  }
+    if (!isLogged(torrent_thread->curl_handle, COOKIE_QBITTORRENT)) {
+        code_function_return = -1;
+        goto cleanup;
+    }
+    if (!user) {
+        code_function_return = -1;
+        goto cleanup;
+    }
+    if (!(url = alloc_format(ENDPOINT_UPLOAD_TORRENT, user))) {
+        code_function_return = -1;
+        goto cleanup;
+    }
+    if ((code_function_return = curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_URL, url)) != CURLE_OK) {
+        goto cleanup;
+    }
+    if ((mime = curl_mime_init(torrent_thread->curl_handle)) == NULL) {
+        code_function_return = -1;
+        goto cleanup;
+    }
+    /* ADD TORRENT */
+    if ((part = curl_mime_addpart(mime)) == NULL) {
+        code_function_return = -1;
+        goto cleanup;
+    }
+    if ((code_function_return = curl_mime_filedata(part, torrent_thread->full_path_torrent_file)) != CURLE_OK) {
+        goto cleanup;
+    }
+    if ((code_function_return = curl_mime_name(part, "torrents")) != CURLE_OK) {
+        goto cleanup;
+    }
+    /* ADD TAG */
+    if ((part = curl_mime_addpart(mime)) == NULL) {
+        code_function_return = -1;
+        goto cleanup;
+    }
+    if ((code_function_return = curl_mime_name(part, "tags")) != CURLE_OK) {
+        goto cleanup;
+    }
+    if ((code_function_return = curl_mime_data(part, torrent_thread->id, strlen(torrent_thread->id))) != CURLE_OK) {
+        goto cleanup;
+    }
+    if ((code_function_return = curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_MIMEPOST, mime)) != CURLE_OK) {
+        goto cleanup;
+    }
+    if ((code_function_return = curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEFUNCTION, &handleCurlResponse)) != CURLE_OK) {
+        goto cleanup;
+    }
+    if ((code_function_return = curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEDATA, (void *)&curl_res)) != CURLE_OK) {
+        goto cleanup;
+    }
+    if ((code_function_return = curl_easy_perform(torrent_thread->curl_handle)) != CURLE_OK) {
+        goto cleanup;
+    }
+    if (!curl_res.html || strstr(curl_res.html, "Ok.") == 0) {
+        code_function_return = -1;
+        goto cleanup;
+    }
+    if (remove(torrent_thread->full_path_torrent_file) != 0) {
+        code_function_return = -1;
+        goto cleanup;
+    }
 
 cleanup:
-  curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEDATA, NULL);
-  curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEFUNCTION, NULL);
-  curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_MIMEPOST, NULL);
-  if(url)
-    free(url);
-  if (mime)
-    curl_mime_free(mime);
-  if (curl_res.html)
-    free(curl_res.html);
-  return code_function_return;
+    curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEDATA, NULL);
+    curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_WRITEFUNCTION, NULL);
+    curl_easy_setopt(torrent_thread->curl_handle, CURLOPT_MIMEPOST, NULL);
+    if (url) free(url);
+    if (mime) curl_mime_free(mime);
+    if (curl_res.html) free(curl_res.html);
+    return code_function_return;
 }
+
 
 int retrieveTorrentInfo(struct thread_torrent *torrent_thread) {
   struct curl_response curl_res = {0};

@@ -1,4 +1,5 @@
 #include "api/api.h"
+#include "api/config_file.h"
 #include "api/env.h"
 #include "api/types.h"
 #include "api/utils.h"
@@ -18,6 +19,11 @@
 #define MAX_INPUT_SIZE 256
 
 int main() {
+
+  if (loadEnv() != 0) {
+    goto cleanup;
+  }
+
   FILE *log_file = 0;
   struct ctx ctx = {0};
   int input_ch = 0;
@@ -33,7 +39,7 @@ int main() {
 
 
   int count_torrent_currently_downloading = 0;
-  char user_input[MAX_INPUT_SIZE];
+  char user_input[MAX_INPUT_SIZE] = {0};
   int size_user_input;
 
   CURL *curl_handle_rutracker = NULL;
@@ -44,9 +50,21 @@ int main() {
   struct dirent *dirent_mpv_movie = {0};
   char* full_path_mpv_movie = NULL;
 
+  char* abs_path_rutracker_file = NULL;
+  char* abs_path_qbittorrent_file = NULL;
+  char* abs_path_log_file = NULL;
 
+  if(!(abs_path_log_file = compute_absolute_path(FILENAME_LOG,FOLDER_LOG))){
+    goto cleanup;
+  }
+  if(!(abs_path_rutracker_file = compute_absolute_path(FILENAME_COOKIE_RUTRACKER,FOLDER_LOG))){
+    goto cleanup;
+  }
+  if(!(abs_path_qbittorrent_file = compute_absolute_path(FILENAME_COOKIE_QBITTORRENT, FOLDER_LOG))){
+    goto cleanup;
+  }
 
-  log_file = fopen("logs.txt", "w");
+  log_file = fopen(abs_path_log_file, "w");
   if (!log_file) {
     goto cleanup;
   }
@@ -67,14 +85,10 @@ int main() {
     goto cleanup;
   }
 
-  if (loadEnv() != 0) {
-    fprintf(log_file, "[!] Failed to set env variables\n");
-    goto cleanup;
-  }
 
   if (authenticate(curl_handle_rutracker, FMT_RUTRACKER,
                    getenv("username_rutracker"), getenv("password_rutracker"),
-                   log_file, COOKIE_FILENAME_RUTRACKER,
+                   log_file,abs_path_rutracker_file,
                    ENDPOINT_LOGIN_RUTRACKER, COOKIE_RUTRACKER) != 0) {
     fprintf(log_file, "[!] Failed to authenticate to rutorrent\n");
     goto cleanup;
@@ -83,7 +97,7 @@ int main() {
   if (authenticate(curl_handle_qbittorrent, FMT_QBITTORRENT,
                    getenv("username_qbittorrent"),
                    getenv("password_qbittorrent"), log_file,
-                   COOKIE_FILENAME_QBITTORRENT, ENDPOINT_LOGIN_QBITTORRENT,
+                   abs_path_qbittorrent_file, ENDPOINT_LOGIN_QBITTORRENT,
                    COOKIE_QBITTORRENT) != 0) {
     fprintf(log_file, "[!] Failed to authenticate to qbitorrent\n");
     goto cleanup;
@@ -128,6 +142,7 @@ int main() {
         pthread_mutex_destroy(&active_downloads[i]->mutex);
         curl_easy_cleanup(active_downloads[i]->curl_handle);
         free(active_downloads[i]->id);
+        free(active_downloads[i]->full_path_torrent_file);
         free(active_downloads[i]);
         free(info_dt[i]);
         /* Edge case if it is the last download*/
@@ -243,7 +258,7 @@ int main() {
           user_input[size_user_input] = '\0';
           torrents_cleanup(torrents_list);
           torrents_list = NULL;
-          torrents_list = search(curl_handle_rutracker, user_input, log_file);
+          torrents_list = search(curl_handle_rutracker, user_input, log_file, abs_path_rutracker_file);
           memset(user_input,0,(size_t)size_user_input);
           size_user_input = 0;
           if (!torrents_list) {
@@ -265,7 +280,7 @@ int main() {
           selected_torrent = item_userptr(current_item(ctx.menu_obj_torrents_result.menu));
           continue;
         }
-        /* download the torrent file from rtorrent*/
+        /* download the torrent file from rutracker*/
         if (ctx.current_windows_state == RESULTS) {
           if (count_torrent_currently_downloading >= MAX_THREAD) {
             fprintf(log_file, "[!] Max 5 downloads at a time, please wait\n");
@@ -279,17 +294,22 @@ int main() {
             ctx.tab_changed = true;
             break;
           }
-          if (download(curl_handle_rutracker, selected_torrent->id, log_file) !=
+          thread_torrent = calloc(1,sizeof(struct thread_torrent));
+          if(!(thread_torrent->full_path_torrent_file = compute_absolute_path(selected_torrent->id, FOLDER_TEMP))){
+            free_threaded_torrent(thread_torrent);
+            break;
+          }
+          if (download(curl_handle_rutracker,selected_torrent->id,thread_torrent->full_path_torrent_file, log_file, abs_path_rutracker_file) !=
               0) {
             fprintf(log_file, "[!] Failed to download torrent\n");
             ctx.current_windows_state = SEARCH;
+            free_threaded_torrent(thread_torrent);
             break;
           }
           /* Create a thread for each torrent:
           *  - retrieve download status on qbittorent
           *  - retrieve final file/directory with rsync
           */
-          thread_torrent = calloc(1,sizeof(struct thread_torrent));
           info_dt[count_torrent_currently_downloading] =
               calloc(1, sizeof(struct info_download_torrents));
           if (selected_torrent) {
@@ -307,7 +327,7 @@ int main() {
           if (authenticate(thread_torrent->curl_handle, FMT_QBITTORRENT,
                           getenv("username_qbittorrent"),
                           getenv("password_qbittorrent"), log_file,
-                          COOKIE_FILENAME_QBITTORRENT,
+                          abs_path_qbittorrent_file,
                           ENDPOINT_LOGIN_QBITTORRENT, COOKIE_QBITTORRENT) != 0) {
             fprintf(log_file, "[!] Failed to authenticate to qbitorrent\n");
             goto cleanup;
@@ -383,6 +403,14 @@ cleanup:
   torrents_cleanup(torrents_list);
   if (log_file)
     fclose(log_file);
+  if(abs_path_log_file)
+    free(abs_path_log_file);
+  if(abs_path_qbittorrent_file)
+    free(abs_path_qbittorrent_file);
+  if(abs_path_rutracker_file)
+    free(abs_path_rutracker_file);
+  if(full_path_mpv_movie)
+    free(full_path_mpv_movie);
 
   /*cleanup handle */
   if (curl_handle_rutracker)

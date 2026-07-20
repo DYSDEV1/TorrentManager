@@ -1,6 +1,10 @@
 #include "utils.h"
 #include "types.h"
+#include <asm-generic/errno-base.h>
+#include <curl/easy.h>
+#include <errno.h>
 #include <ncurses.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -9,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 
 void free_torrent(struct torrent *torrent) {
   if (!torrent)
@@ -20,6 +25,17 @@ void free_torrent(struct torrent *torrent) {
   free(torrent->size);
   free(torrent);
 }
+void free_threaded_torrent(struct thread_torrent *torrent){
+  if(!torrent)
+    return;
+  free(torrent->full_path_torrent_file);
+  free(torrent->id);
+  curl_easy_cleanup(torrent->curl_handle);
+  pthread_mutex_destroy(&torrent->mutex);
+  free(torrent);
+}
+
+
 
 struct torrent *parse(struct curl_response *curl_res) {
   char *cp_html = curl_res->html;
@@ -198,3 +214,41 @@ struct downloaded_movies_list* enumerate_movies(FILE *log_file){
   return movies_list;
 }
 
+char* compute_absolute_path(char* filename, char* directory){
+  char* full_path = NULL;
+  char* dir_path = NULL;
+  const char* home = getenv("HOME");
+  struct stat st;
+  if(!filename || !directory || !home){
+    goto cleanup;
+  }
+  if(!(dir_path = alloc_format("%s/%s/%s",home,directory,APP_FOLDER_NAME))){
+    goto cleanup;
+  }
+  if(!(full_path = alloc_format("%s/%s/%s/%s",home,directory,APP_FOLDER_NAME,filename))){
+    goto cleanup;
+  }
+  if(stat(dir_path,&st) == 0){
+    if(!S_ISDIR(st.st_mode)){
+      goto cleanup;
+    }
+    /*directory already exist */
+    free(dir_path);
+    return full_path;
+  }
+  if(errno != ENOENT){
+    goto cleanup;
+  }
+  if(mkdir(dir_path, 0700) != 0 && errno != EEXIST){
+    goto cleanup;
+  }
+  free(dir_path);
+  return full_path;
+
+  cleanup:
+    if(full_path)
+      free(full_path);
+    if(dir_path)
+      free(dir_path);
+    return NULL;
+}

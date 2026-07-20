@@ -1,10 +1,12 @@
 #ifndef UTILS__H_
 #define UTILS__H_
 #include "types.h"
+#include "config_file.h"
 #include <iconv.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
 
 #define HTML_INDICATOR_DESC "<a data-topic_id="
 #define HTML_INDICATOR_SEEDERS "<b class=\"seedmed\">"
@@ -33,9 +35,10 @@
 
 struct torrent *parse(struct curl_response *curl_res);
 void torrents_cleanup(struct torrent *torrents_list);
+void free_threaded_torrent(struct thread_torrent *torrent);
 void downloaded_movies_list_cleanup(struct downloaded_movies_list *dl_movies_list);
 char *clean_str(char *str);
 char *alloc_format(const char *fmt, ...);
 struct downloaded_movies_list* enumerate_movies(FILE *log_file);
-
+char* compute_absolute_path(char* filename, char* directory);
 #endif

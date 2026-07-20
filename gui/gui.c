@@ -241,7 +241,6 @@ void gui_render(struct ctx *ctx, struct torrent *curr_torrent, char *user_input,
     if (ctx->current_windows_state == SEARCH) {
       box(ctx->win_search_bar, 0, 0);
       mvwprintw(ctx->win_search_bar, 0, 1, "search");
-      wmove(ctx->win_search_bar, 1, 1);
       wnoutrefresh(ctx->win_search_bar);
     }
     if (ctx->current_windows_state == RESULTS) {

@@ -28,8 +28,7 @@
   "https://kit.seedhost.eu/%s/qbittorrent/api/v2/torrents/info?tag=%s"
 #define ENDPOINT_GET_TORRENT_PROGRESSION                                       \
   "https://kit.seedhost.eu/%s/qbittorrent/api/v2/torrents/info?hashes=%s"
-#define COOKIE_FILENAME_RUTRACKER "rutracker_cookie.txt"
-#define COOKIE_FILENAME_QBITTORRENT "qbitorrent_cookie.txt"
+
 
 #define FMT_RUTRACKER "login_username=%s&login_password=%s&login=%s"
 #define FMT_QBITTORRENT "username=%s&password=%s"
@@ -44,11 +43,11 @@ int authenticate(CURL *curl_handle, const char *fmt, const char *user,
                  enum cookie_type ct);
 
 struct torrent *search(CURL *curl_handle, const char *search_string,
-                       FILE *log_file);
+                       FILE *log_file, const char* full_path_cookie_rutracker);
 
 bool isLogged(CURL *curl_handle, enum cookie_type);
 
-int download(CURL *curl_handle, const char *torrent_name, FILE *log_file);
+int download(CURL *curl_handle, const char *torrent_name,const char *full_path_torrent_file, FILE *log_file, const char* full_path_cookie_rutracker);
 
 int uploadToServer(struct thread_torrent *tt);
 

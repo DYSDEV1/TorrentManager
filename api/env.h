@@ -2,14 +2,14 @@
 #define ENV__H_
 
 
-#define _GNU_SOURCE
-
+#include "utils.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 
 #define ENVFILE ".env"
+
 
 
 int loadEnv(void);
