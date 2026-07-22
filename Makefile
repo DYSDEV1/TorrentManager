@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g -Wall -Wextra -Wconversion -Wsign-conversion 
+CFLAGS =  -Wall -Wextra -Wconversion -Wsign-conversion 
 LDFLAGS = -lcurl -lncurses -lmenu -lpthread
 API_DIR = api
 GUI_DIR = gui
@@ -8,7 +8,7 @@ UTILS_DIR = utils
 TARGET = torrent_manager
 
 ifdef DEBUG
-CFLAGS += -fsanitize=address,undefined
+CFLAGS += -g -O0 -fsanitize=address,undefined
 LDFLAGS += -fsanitize=address,undefined
 endif
 

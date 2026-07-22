@@ -231,6 +231,7 @@ struct torrent *search(CURL *curl_handle, const char *search_string,
   char *url_search = NULL;
   char *postfields = NULL;
   char *encoded_search_string = NULL;
+  struct torrent *torrents_list = NULL;
 
   if (!isLogged(curl_handle, COOKIE_RUTRACKER)) {
     if (authenticate(curl_handle, FMT_RUTRACKER, getenv("username_rutracker"),
@@ -287,7 +288,7 @@ struct torrent *search(CURL *curl_handle, const char *search_string,
     fprintf(log_file, "[!] Failed to execute request\n");
     goto cleanup;
   }
-  struct torrent *torrents_list = parse(&curl_res);
+  torrents_list = parse(&curl_res);
 
 cleanup:
   curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, NULL);
