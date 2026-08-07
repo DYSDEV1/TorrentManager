@@ -1,5 +1,3 @@
-# rutracker_c_api
-
 ## Build & run
 
 Create a `.env` file at the project root:
