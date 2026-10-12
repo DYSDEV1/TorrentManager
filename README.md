@@ -1,3 +1,6 @@
+
+!! Not working anymore cause of cloudflare protection :(
+
 ## Build & run
 
 Create a `.env` file at the project root:
